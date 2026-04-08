@@ -97,7 +97,14 @@ fn add_cover_page(
         228.0,
         &format!("Event Count: {}", manifest.event_count),
     );
-    write_line(layer, ctx.bold_font, 12.0, 20.0, 212.0, "JSON Manifest SHA256");
+    write_line(
+        layer,
+        ctx.bold_font,
+        12.0,
+        20.0,
+        212.0,
+        "JSON Manifest SHA256",
+    );
     write_line(layer, ctx.font, 10.0, 20.0, 204.0, manifest_hash);
 }
 
