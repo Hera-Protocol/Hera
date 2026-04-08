@@ -1,6 +1,7 @@
 use std::{future::Future, sync::Arc, time::Duration};
 
 use deadpool_redis::Pool as RedisPool;
+use ed25519_dalek::SigningKey;
 use hera_core::{normalize_namada_note, normalize_zcash_note, NormalizationContext};
 use hera_crypto::{decrypt_viewing_key, EncryptedViewingKey, KmsClient};
 use hera_db::{
@@ -17,7 +18,8 @@ use hera_namada_adapter::{
     detect_owned_notes, parse_and_validate as parse_namada_view_key, MaspIndexerClient,
     TransferDirection,
 };
-use hera_types::{ChainId, ScanJobStatus};
+use hera_reporter::{build_manifest, build_pdf, ReportStorage};
+use hera_types::{Case, ChainId, ScanJobStatus};
 use hera_zcash_adapter::{parse_and_validate as parse_zcash_view_key, TxMeta, ZcashScanner};
 use rand::{thread_rng, Rng};
 use tracing::info;
@@ -34,6 +36,8 @@ pub struct ScanOrchestrator {
     pub db: DbPool,
     pub redis: RedisPool,
     pub crypto: Arc<dyn KmsClient>,
+    pub report_storage: Arc<ReportStorage>,
+    pub report_signing_key: Arc<SigningKey>,
     pub config: Config,
 }
 
@@ -59,7 +63,7 @@ impl ScanOrchestrator {
             OrchestratorError::MissingRecord(format!("view key for case {}", case.id))
         })?;
 
-        let outcome = async {
+        let outcome: Result<(), OrchestratorError> = async {
             // KEY_VALIDATED decrypts the stored ciphertext and validates the key
             // before any network scan begins.
             self.transition(job.id, ScanJobStatus::KeyValidated).await?;
@@ -80,6 +84,7 @@ impl ScanOrchestrator {
                         .await?;
                     let from_height = get_last_checkpoint(&self.db, case.id, job.chain.clone())
                         .await?
+                        .or(stored_key.birthday_height)
                         .or(validated_key.birthday_height.map(u64::from))
                         .unwrap_or(0);
                     let from_height = u32::try_from(from_height).map_err(|_| {
@@ -89,6 +94,17 @@ impl ScanOrchestrator {
                         lightwalletd_url: self.config.lightwalletd_url.clone(),
                         network: job.network.clone(),
                     };
+                    let to_height = self
+                        .with_retry("zcash chain tip", || {
+                            let scanner = &scanner;
+                            async move {
+                                scanner
+                                    .latest_block_height()
+                                    .await
+                                    .map_err(OrchestratorError::from)
+                            }
+                        })
+                        .await?;
                     let notes = self
                         .with_retry("zcash scan", || {
                             let scanner = &scanner;
@@ -98,7 +114,7 @@ impl ScanOrchestrator {
                             let chain = job.chain.clone();
                             async move {
                                 scanner
-                                    .scan(&validated_key, from_height, from_height, |checkpoint| {
+                                    .scan(&validated_key, from_height, to_height, |checkpoint| {
                                         let db = db.clone();
                                         let chain = chain.clone();
                                         tokio::spawn(async move {
@@ -155,6 +171,7 @@ impl ScanOrchestrator {
                         .await?;
                     let from_block = get_last_checkpoint(&self.db, case.id, job.chain.clone())
                         .await?
+                        .or(stored_key.birthday_height)
                         .or(validated_key.birthday_height)
                         .unwrap_or(0);
                     let client = MaspIndexerClient {
@@ -217,10 +234,13 @@ impl ScanOrchestrator {
             // independently of scanning and normalization.
             self.transition(job.id, ScanJobStatus::BuildingReport)
                 .await?;
-            self.build_report(job.id).await?;
+            self.build_report(&case).await?;
+            self.append_audit(&audits, job.id, AuditAction::ReportExported)
+                .await?;
 
             // SIGNED records successful artifact completion. Prompt 9 will wire
-            // the actual reporter and signature storage behind this transition.
+            // the stored artifacts and detached signature behind a final durable
+            // job-state transition.
             self.transition(job.id, ScanJobStatus::Signed).await?;
             self.append_audit(&audits, job.id, AuditAction::StatusChanged)
                 .await?;
@@ -288,11 +308,14 @@ impl ScanOrchestrator {
             .map_err(OrchestratorError::from)
     }
 
-    async fn build_report(&self, job_id: Uuid) -> Result<(), OrchestratorError> {
-        let _ = &self.redis;
-        Err(OrchestratorError::ReporterUnavailable(format!(
-            "report generation for job {job_id} will be wired in apps/reporter"
-        )))
+    async fn build_report(&self, case: &Case) -> Result<(), OrchestratorError> {
+        let events = EventRepo::new(&self.db).get_events_for_case(case.id).await?;
+        let manifest = build_manifest(case, &events, self.report_signing_key.as_ref())?;
+        let pdf = build_pdf(&manifest, case)?;
+        self.report_storage
+            .store_report(case.id, &manifest, &pdf)
+            .await?;
+        Ok(())
     }
 
     async fn with_retry<T, F, Fut>(

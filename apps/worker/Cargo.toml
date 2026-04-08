@@ -7,12 +7,17 @@ publish.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+aws-config = "1"
+aws-sdk-s3 = "1"
+base64 = "0.22"
 chrono.workspace = true
 deadpool-redis = "0.18"
+ed25519-dalek = "2.1"
 hera-core = { path = "../../crates/hera-core" }
 hera-crypto = { path = "../../crates/hera-crypto" }
 hera-db = { path = "../../crates/hera-db" }
 hera-namada-adapter = { path = "../../crates/hera-namada-adapter" }
+hera-reporter = { path = "../reporter" }
 hera-types = { path = "../../crates/hera-types" }
 hera-zcash-adapter = { path = "../../crates/hera-zcash-adapter" }
 rand = "0.8"

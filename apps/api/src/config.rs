@@ -10,6 +10,9 @@ pub struct Config {
     pub redis_url: String,
     pub bind_addr: String,
     pub kms_key_ref: String,
+    pub aws_region: String,
+    pub aws_endpoint_url: Option<String>,
+    pub report_bucket: String,
 }
 
 impl Config {
@@ -19,6 +22,9 @@ impl Config {
             redis_url: required("REDIS_URL")?,
             bind_addr: optional("API_BIND_ADDR").unwrap_or_else(|| "0.0.0.0:3000".to_string()),
             kms_key_ref: required("KMS_KEY_ID")?,
+            aws_region: required("AWS_REGION")?,
+            aws_endpoint_url: optional("AWS_ENDPOINT_URL"),
+            report_bucket: required("S3_BUCKET")?,
         })
     }
 }

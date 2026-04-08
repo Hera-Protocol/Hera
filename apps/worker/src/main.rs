@@ -9,8 +9,12 @@ use std::sync::{
     Arc,
 };
 
+use aws_config::{BehaviorVersion, Region};
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use deadpool_redis::{Config as RedisConfig, Runtime};
+use ed25519_dalek::SigningKey;
 use hera_crypto::{KmsClient, LocalDevKms};
+use hera_reporter::ReportStorage;
 use tokio::sync::watch;
 use tracing::{error, info};
 
@@ -30,6 +34,15 @@ async fn main() -> anyhow::Result<()> {
     let redis =
         RedisConfig::from_url(config.redis_url.clone()).create_pool(Some(Runtime::Tokio1))?;
     let crypto: Arc<dyn KmsClient> = Arc::new(LocalDevKms::from_env()?);
+    let signing_key = Arc::new(load_signing_key_from_env()?);
+    let report_storage = Arc::new(
+        ReportStorage::new(
+            build_s3_client(&config).await,
+            config.report_bucket.clone(),
+            db.clone(),
+            config.report_kms_key_id.clone(),
+        ),
+    );
 
     // We run multiple worker tasks not multiple processes in Stage 1. Stage 4
     // will scale to separate worker pods.
@@ -42,6 +55,8 @@ async fn main() -> anyhow::Result<()> {
         let worker_db = db.clone();
         let worker_redis = redis.clone();
         let worker_crypto = Arc::clone(&crypto);
+        let worker_report_storage = Arc::clone(&report_storage);
+        let worker_signing_key = Arc::clone(&signing_key);
         let worker_in_flight = Arc::clone(&in_flight);
         let worker_shutdown = shutdown_rx.clone();
 
@@ -50,10 +65,10 @@ async fn main() -> anyhow::Result<()> {
                 db: worker_db,
                 redis: worker_redis.clone(),
                 crypto: worker_crypto,
+                report_storage: worker_report_storage,
+                report_signing_key: worker_signing_key,
                 config: worker_config.clone(),
             };
-            let mut worker_shutdown = worker_shutdown;
-
             loop {
                 if *worker_shutdown.borrow() {
                     break;
@@ -121,4 +136,30 @@ async fn wait_for_shutdown_signal() {
     {
         let _ = tokio::signal::ctrl_c().await;
     }
+}
+
+async fn build_s3_client(config: &Config) -> aws_sdk_s3::Client {
+    let shared_config = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::new(config.aws_region.clone()))
+        .load()
+        .await;
+
+    let mut builder = aws_sdk_s3::config::Builder::from(&shared_config);
+    if let Some(endpoint_url) = &config.aws_endpoint_url {
+        builder = builder.endpoint_url(endpoint_url);
+    }
+
+    aws_sdk_s3::Client::from_conf(builder.build())
+}
+
+fn load_signing_key_from_env() -> anyhow::Result<SigningKey> {
+    let seed_b64 =
+        std::env::var("SIGNING_KEY_BASE64").map_err(|_| anyhow::anyhow!("missing SIGNING_KEY_BASE64"))?;
+    let seed = BASE64_STANDARD
+        .decode(seed_b64.trim())
+        .map_err(|err| anyhow::anyhow!("invalid SIGNING_KEY_BASE64: {err}"))?;
+    let seed: [u8; 32] = seed
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("SIGNING_KEY_BASE64 must decode to exactly 32 bytes"))?;
+    Ok(SigningKey::from_bytes(&seed))
 }

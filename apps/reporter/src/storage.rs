@@ -124,6 +124,27 @@ impl ReportStorage {
             .map_err(|err| ReporterError::Storage(err.to_string()))?;
         Ok(())
     }
+
+    /// Downloads an immutable artifact by object key so the API can serve the
+    /// exact bytes that were previously signed and stored.
+    pub async fn load_artifact_bytes(&self, key: &str) -> Result<Vec<u8>, ReporterError> {
+        let response = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|err| ReporterError::Storage(err.to_string()))?;
+
+        let bytes = response
+            .body
+            .collect()
+            .await
+            .map_err(|err| ReporterError::Storage(err.to_string()))?;
+
+        Ok(bytes.into_bytes().to_vec())
+    }
 }
 
 fn hex_sha256(bytes: &[u8]) -> String {

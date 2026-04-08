@@ -14,6 +14,10 @@ pub struct Config {
     pub lightwalletd_url: String,
     pub namada_indexer_url: String,
     pub scan_engine_version: String,
+    pub aws_region: String,
+    pub aws_endpoint_url: Option<String>,
+    pub report_bucket: String,
+    pub report_kms_key_id: Option<String>,
 }
 
 impl Config {
@@ -32,6 +36,10 @@ impl Config {
             namada_indexer_url: required("NAMADA_INDEXER_URL")?,
             scan_engine_version: optional("SCAN_ENGINE_VERSION")
                 .unwrap_or_else(|| "stage1".to_string()),
+            aws_region: required("AWS_REGION")?,
+            aws_endpoint_url: optional("AWS_ENDPOINT_URL"),
+            report_bucket: required("S3_BUCKET")?,
+            report_kms_key_id: optional("KMS_KEY_ID"),
         })
     }
 }

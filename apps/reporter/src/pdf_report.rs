@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::io::BufWriter;
 
 use printpdf::{BuiltinFont, Mm, PdfDocument, PdfDocumentReference, PdfLayerReference};
 use sha2::{Digest, Sha256};
@@ -40,10 +40,12 @@ pub fn build_pdf(manifest: &SignedManifest, case: &Case) -> Result<Vec<u8>, Repo
     add_timeline_page(&doc, &font, &bold_font, manifest)?;
     add_signature_page(&doc, &font, &bold_font, manifest, &manifest_hash);
 
-    let mut bytes = Vec::new();
-    doc.save(&mut Cursor::new(&mut bytes))
+    let mut writer = BufWriter::new(Vec::new());
+    doc.save(&mut writer)
         .map_err(|err| ReporterError::PdfGeneration(err.to_string()))?;
-    Ok(bytes)
+    writer
+        .into_inner()
+        .map_err(|err| ReporterError::PdfGeneration(err.to_string()))
 }
 
 fn add_cover_page(
@@ -235,7 +237,7 @@ fn write_line(
     y: f64,
     text: &str,
 ) {
-    layer.use_text(text, size, Mm(x), Mm(y), font);
+    layer.use_text(text, size as f32, Mm(x as f32), Mm(y as f32), font);
 }
 
 fn summarize_event_types(events: &[CanonicalEvent]) -> Vec<(String, usize)> {

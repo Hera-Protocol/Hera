@@ -14,10 +14,10 @@ pub enum OrchestratorError {
     Namada(#[from] hera_namada_adapter::NamadaAdapterError),
     #[error("normalization error: {0}")]
     Normalization(#[from] hera_core::NormalizationError),
+    #[error("reporter error: {0}")]
+    Reporter(#[from] hera_reporter::ReporterError),
     #[error("queue error: {0}")]
     Queue(String),
     #[error("missing record: {0}")]
     MissingRecord(String),
-    #[error("reporter unavailable: {0}")]
-    ReporterUnavailable(String),
 }

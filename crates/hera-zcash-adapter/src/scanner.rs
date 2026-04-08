@@ -4,7 +4,9 @@ use hera_types::Network;
 use prost::Message;
 use zcash_client_backend::proto::{
     compact_formats::{CompactBlock, CompactOrchardAction, CompactSaplingOutput},
-    service::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, Empty},
+    service::{
+        compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, ChainSpec, Empty,
+    },
 };
 
 use crate::{
@@ -22,6 +24,23 @@ pub struct ZcashScanner {
 }
 
 impl ZcashScanner {
+    /// Queries the remote tip height before a scan so the orchestrator can bind
+    /// a scan window to a concrete chain state instead of guessing an end block.
+    pub async fn latest_block_height(&self) -> Result<u32, ZcashAdapterError> {
+        let mut client = CompactTxStreamerClient::connect(self.lightwalletd_url.clone())
+            .await
+            .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?;
+
+        let block = client
+            .get_latest_block(ChainSpec {})
+            .await
+            .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?
+            .into_inner();
+
+        u32::try_from(block.height)
+            .map_err(|_| ZcashAdapterError::ScanFailed("tip height overflow".into()))
+    }
+
     /// Streams compact blocks from lightwalletd and trial-decrypts each shielded
     /// output. `checkpoint_cb` is called every N blocks so the orchestrator can
     /// persist progress. If this job is interrupted and retried, we resume from

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use deadpool_redis::Pool as RedisPool;
 use hera_crypto::KmsClient;
+use hera_reporter::ReportStorage;
 use hera_db::DbPool;
 use uuid::Uuid;
 
@@ -11,6 +12,7 @@ pub struct AppState {
     pub db: DbPool,
     pub redis: RedisPool,
     pub crypto: Arc<dyn KmsClient>,
+    pub report_storage: Arc<ReportStorage>,
     pub kms_key_ref: String,
 }
 
@@ -20,5 +22,4 @@ pub struct AppState {
 #[derive(Debug, Clone)]
 pub struct TenantContext {
     pub tenant_id: Uuid,
-    pub tenant_name: String,
 }

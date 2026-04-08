@@ -36,7 +36,6 @@ pub async fn auth_middleware(
 
     request.extensions_mut().insert(TenantContext {
         tenant_id: tenant.id,
-        tenant_name: tenant.name,
     });
 
     Ok(next.run(request).await)
