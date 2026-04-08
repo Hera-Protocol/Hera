@@ -6,3 +6,10 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+chrono.workspace = true
+hera-namada-adapter = { path = "../hera-namada-adapter" }
+hera-types = { path = "../hera-types" }
+hera-zcash-adapter = { path = "../hera-zcash-adapter" }
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
