@@ -6,3 +6,19 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+axum.workspace = true
+deadpool-redis = "0.18"
+hera-crypto = { path = "../../crates/hera-crypto" }
+hera-db = { path = "../../crates/hera-db" }
+hera-types = { path = "../../crates/hera-types" }
+redis = { version = "0.27", features = ["tokio-comp"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tower-http = { version = "0.6", features = ["request-id", "trace"] }
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid.workspace = true
+zeroize = "1.8"
