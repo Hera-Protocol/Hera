@@ -156,7 +156,10 @@ mod tests {
 
     #[test]
     fn converts_zatoshis_exactly() {
-        assert_eq!(convert_zatoshis_to_decimal(125_000_000).unwrap(), "1.25000000");
+        assert_eq!(
+            convert_zatoshis_to_decimal(125_000_000).unwrap(),
+            "1.25000000"
+        );
         assert_eq!(convert_zatoshis_to_decimal(42).unwrap(), "0.00000042");
     }
 
@@ -186,8 +189,14 @@ mod tests {
         let event = normalize_zcash_note(note, tx_meta, &test_context(ChainId::Zcash)).unwrap();
 
         assert_eq!(event.amount, "1.25000000");
-        assert_eq!(event.case_id.to_string(), "11111111-1111-1111-1111-111111111111");
-        assert_eq!(event.evidence_refs, vec!["compactblock:42:deadbeef".to_string()]);
+        assert_eq!(
+            event.case_id.to_string(),
+            "11111111-1111-1111-1111-111111111111"
+        );
+        assert_eq!(
+            event.evidence_refs,
+            vec!["compactblock:42:deadbeef".to_string()]
+        );
     }
 
     #[test]
@@ -214,7 +223,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(event.amount, "1.250000");
-        assert_eq!(event.evidence_refs, vec!["indexer:tx/nam-tx-1:nam-tx-1".to_string()]);
+        assert_eq!(
+            event.evidence_refs,
+            vec!["indexer:tx/nam-tx-1:nam-tx-1".to_string()]
+        );
         assert_eq!(event.network, Network::Testnet);
     }
 }
