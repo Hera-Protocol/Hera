@@ -9,7 +9,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use hera_crypto::encrypt_viewing_key;
-use hera_db::repos::keys::ViewKeyRepo;
+use hera_db::repos::keys::{EncryptedViewKeyRecord, ViewKeyRepo};
 use hera_types::ChainId;
 
 use crate::{error::ApiError, state::AppState};
@@ -59,15 +59,15 @@ async fn import_view_key(
     .map_err(ApiError::internal)?;
 
     ViewKeyRepo::new(&state.db)
-        .store_encrypted_view_key(
+        .store_encrypted_view_key(EncryptedViewKeyRecord {
             case_id,
             chain,
-            &encrypted.key_ref,
-            &encrypted.ciphertext,
-            &encrypted.nonce,
-            &encrypted.encrypted_data_key,
-            payload.birthday_height,
-        )
+            key_ref: &encrypted.key_ref,
+            ciphertext: &encrypted.ciphertext,
+            nonce: &encrypted.nonce,
+            encrypted_data_key: &encrypted.encrypted_data_key,
+            birthday_height: payload.birthday_height,
+        })
         .await
         .map_err(ApiError::internal)?;
 

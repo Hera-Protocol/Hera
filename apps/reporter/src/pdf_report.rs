@@ -26,16 +26,13 @@ pub fn build_pdf(manifest: &SignedManifest, case: &Case) -> Result<Vec<u8>, Repo
         .add_builtin_font(BuiltinFont::HelveticaBold)
         .map_err(|err| ReporterError::PdfGeneration(err.to_string()))?;
 
-    add_cover_page(
-        &doc,
-        first_page,
-        first_layer,
-        &font,
-        &bold_font,
-        case,
-        manifest,
-        &manifest_hash,
-    );
+    let first_page_layer = doc.get_page(first_page).get_layer(first_layer);
+    let page_ctx = PdfPageContext {
+        font: &font,
+        bold_font: &bold_font,
+    };
+
+    add_cover_page(&page_ctx, &first_page_layer, case, manifest, &manifest_hash);
     add_summary_page(&doc, &font, &bold_font, manifest)?;
     add_timeline_page(&doc, &font, &bold_font, manifest)?;
     add_signature_page(&doc, &font, &bold_font, manifest, &manifest_hash);
@@ -48,59 +45,60 @@ pub fn build_pdf(manifest: &SignedManifest, case: &Case) -> Result<Vec<u8>, Repo
         .map_err(|err| ReporterError::PdfGeneration(err.to_string()))
 }
 
+struct PdfPageContext<'a> {
+    font: &'a printpdf::IndirectFontRef,
+    bold_font: &'a printpdf::IndirectFontRef,
+}
+
 fn add_cover_page(
-    doc: &PdfDocumentReference,
-    page: printpdf::PdfPageIndex,
-    layer: printpdf::PdfLayerIndex,
-    font: &printpdf::IndirectFontRef,
-    bold_font: &printpdf::IndirectFontRef,
+    ctx: &PdfPageContext<'_>,
+    layer: &PdfLayerReference,
     case: &Case,
     manifest: &SignedManifest,
     manifest_hash: &str,
 ) {
-    let layer = doc.get_page(page).get_layer(layer);
     write_line(
-        &layer,
-        bold_font,
+        layer,
+        ctx.bold_font,
         24.0,
         20.0,
         270.0,
         "Hera Compliance Report",
     );
     write_line(
-        &layer,
-        font,
+        layer,
+        ctx.font,
         12.0,
         20.0,
         252.0,
         &format!("Case ID: {}", case.id),
     );
     write_line(
-        &layer,
-        font,
+        layer,
+        ctx.font,
         12.0,
         20.0,
         244.0,
         &format!("Chain: {:?} / {:?}", case.chain, case.network),
     );
     write_line(
-        &layer,
-        font,
+        layer,
+        ctx.font,
         12.0,
         20.0,
         236.0,
         &format!("Generated At: {}", manifest.generated_at.to_rfc3339()),
     );
     write_line(
-        &layer,
-        font,
+        layer,
+        ctx.font,
         12.0,
         20.0,
         228.0,
         &format!("Event Count: {}", manifest.event_count),
     );
-    write_line(&layer, bold_font, 12.0, 20.0, 212.0, "JSON Manifest SHA256");
-    write_line(&layer, font, 10.0, 20.0, 204.0, manifest_hash);
+    write_line(layer, ctx.bold_font, 12.0, 20.0, 212.0, "JSON Manifest SHA256");
+    write_line(layer, ctx.font, 10.0, 20.0, 204.0, manifest_hash);
 }
 
 fn add_summary_page(

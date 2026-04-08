@@ -19,6 +19,19 @@ pub struct StoredViewingKey {
     pub birthday_height: Option<u64>,
 }
 
+/// Groups encrypted viewing-key fields into one persistence payload so callers
+/// cannot mix ciphertext components across separate parameters.
+#[derive(Debug, Clone)]
+pub struct EncryptedViewKeyRecord<'a> {
+    pub case_id: Uuid,
+    pub chain: ChainId,
+    pub key_ref: &'a str,
+    pub ciphertext: &'a [u8],
+    pub nonce: &'a [u8],
+    pub encrypted_data_key: &'a [u8],
+    pub birthday_height: Option<u64>,
+}
+
 /// Persists encrypted viewing keys while ensuring database callers only handle
 /// ciphertext and metadata, never plaintext key material.
 pub struct ViewKeyRepo<'a> {
@@ -34,14 +47,18 @@ impl<'a> ViewKeyRepo<'a> {
     /// prior ciphertext atomically without ever storing plaintext.
     pub async fn store_encrypted_view_key(
         &self,
-        case_id: Uuid,
-        chain: ChainId,
-        key_ref: &str,
-        ciphertext: &[u8],
-        nonce: &[u8],
-        encrypted_data_key: &[u8],
-        birthday_height: Option<u64>,
+        record: EncryptedViewKeyRecord<'_>,
     ) -> Result<StoredViewingKey, DbError> {
+        let EncryptedViewKeyRecord {
+            case_id,
+            chain,
+            key_ref,
+            ciphertext,
+            nonce,
+            encrypted_data_key,
+            birthday_height,
+        } = record;
+
         let row = sqlx::query_as::<_, ViewKeyRow>(
             r#"
             INSERT INTO view_keys (
