@@ -1916,12 +1916,14 @@ dependencies = [
 name = "hera-db"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "hera-crypto",
  "hera-types",
  "serde_json",
  "sqlx",
  "thiserror 1.0.69",
+ "tokio",
  "uuid",
 ]
 
