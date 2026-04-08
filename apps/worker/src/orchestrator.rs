@@ -34,7 +34,7 @@ use crate::{
 /// Drives the durable scan-job state machine for one queued job.
 pub struct ScanOrchestrator {
     pub db: DbPool,
-    pub redis: RedisPool,
+    pub _redis: RedisPool,
     pub crypto: Arc<dyn KmsClient>,
     pub report_storage: Arc<ReportStorage>,
     pub report_signing_key: Arc<SigningKey>,

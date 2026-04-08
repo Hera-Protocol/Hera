@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
         handles.push(tokio::spawn(async move {
             let orchestrator = ScanOrchestrator {
                 db: worker_db,
-                redis: worker_redis.clone(),
+                _redis: worker_redis.clone(),
                 crypto: worker_crypto,
                 report_storage: worker_report_storage,
                 report_signing_key: worker_signing_key,

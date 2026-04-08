@@ -76,15 +76,22 @@ pub fn normalize_namada_note(
         return Err(NormalizationError::MissingRequiredField("txid".into()));
     }
 
-    // The current Stage 1 MASP note shape does not carry a block timestamp. We
-    // fail explicitly here instead of fabricating one, because an invented
-    // compliance timestamp would be worse than a typed normalization failure.
-    let _ = map_namada_note_to_canonical(&note, direction, fee.as_ref(), &ctx.scan_engine_version)
+    let mut event =
+        map_namada_note_to_canonical(&note, direction, fee.as_ref(), &ctx.scan_engine_version)
         .map_err(|err| NormalizationError::UnsupportedEventType(err.to_string()))?;
+    event.case_id = ctx.case_id;
+    event.chain = ctx.chain.clone();
+    event.network = ctx.network.clone();
+    event.amount = convert_raw_to_decimal(note.amount_raw, note.asset.decimals)?;
+    event.evidence_refs = build_evidence_refs(
+        ChainId::Namada,
+        &[EvidenceRef::IndexerEntry {
+            url: format!("tx/{}", note.txid),
+            txid: note.txid,
+        }],
+    );
 
-    Err(NormalizationError::MissingRequiredField(
-        "timestamp for Namada MASP note".into(),
-    ))
+    Ok(event)
 }
 
 /// Returns a decimal string like `1.25000000`. We use `String` not `f64`

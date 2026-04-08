@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use hera_types::Asset;
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct MaspNote {
     pub txid: String,
     pub block_height: u64,
+    pub timestamp: DateTime<Utc>,
     pub asset: Asset,
     pub amount_raw: u128,
     pub note_commitment: String,

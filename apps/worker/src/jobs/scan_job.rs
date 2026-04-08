@@ -16,6 +16,7 @@ pub struct ScanJobMessage {
 }
 
 /// Pushes a scan job into the pending queue for later worker pickup.
+#[allow(dead_code)]
 pub async fn enqueue(
     redis: &RedisPool,
     queue_name: &str,

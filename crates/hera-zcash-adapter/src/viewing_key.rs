@@ -1,5 +1,7 @@
 use hera_types::Network;
 use serde::{Deserialize, Serialize};
+use zcash_keys::keys::{UnifiedFullViewingKey, UnifiedIncomingViewingKey};
+use zcash_protocol::consensus::{MAIN_NETWORK, TEST_NETWORK};
 
 use crate::error::ZcashAdapterError;
 
@@ -24,8 +26,9 @@ pub struct ValidatedZcashKey {
     pub birthday_height: Option<u32>,
 }
 
-/// Performs conservative string-level validation of UFVK/IVK/FVK material before
-/// the worker tries to hand it to lower-level Zcash libraries.
+/// Validates the serialized viewing key with the canonical Zcash key parsers so
+/// later scanning code can rely on network-correct UFVK/UIVK semantics instead
+/// of hand-rolled string heuristics.
 pub fn parse_and_validate(
     raw: &str,
     network: Network,
@@ -37,38 +40,34 @@ pub fn parse_and_validate(
         ));
     }
 
-    // UFVK and FVK encodings are Bech32-like strings. We validate conservatively
-    // here instead of guessing full semantics because false acceptance is worse
-    // than rejecting a malformed compliance key import.
-    let lower = trimmed.to_ascii_lowercase();
-    let key_scope = if lower.contains("ivk") || lower.starts_with("zxviewi") {
-        KeyScope::Incoming
-    } else {
-        KeyScope::Full
+    let key_scope = match network {
+        Network::Mainnet => decode_scope(trimmed, &MAIN_NETWORK)?,
+        // Regtest uses testnet-style encodings for unified viewing keys, so we
+        // validate against testnet parameters and keep the explicit Regtest
+        // selection for the network context carried above the adapter.
+        Network::Testnet | Network::Regtest => decode_scope(trimmed, &TEST_NETWORK)?,
     };
-
-    let looks_bech32ish = trimmed.contains('1') && trimmed.len() > 16;
-    if !looks_bech32ish {
-        return Err(ZcashAdapterError::InvalidViewingKey(
-            "expected a bech32-like UFVK, IVK, or FVK string".into(),
-        ));
-    }
-
-    // This network check is intentionally conservative. We only reject strings
-    // that self-identify as the opposite environment in their human-readable part.
-    let mismatched_network = match network {
-        Network::Mainnet => lower.contains("test"),
-        Network::Testnet | Network::Regtest => lower.contains("main"),
-    };
-    if mismatched_network {
-        return Err(ZcashAdapterError::InvalidViewingKey(
-            "viewing key appears to target a different Zcash network".into(),
-        ));
-    }
 
     Ok(ValidatedZcashKey {
         raw_key: trimmed.to_string(),
         key_scope,
         birthday_height: None,
     })
+}
+
+fn decode_scope<P>(raw: &str, params: &P) -> Result<KeyScope, ZcashAdapterError>
+where
+    P: zcash_protocol::consensus::Parameters,
+{
+    if UnifiedFullViewingKey::decode(params, raw).is_ok() {
+        return Ok(KeyScope::Full);
+    }
+
+    if UnifiedIncomingViewingKey::decode(params, raw).is_ok() {
+        return Ok(KeyScope::Incoming);
+    }
+
+    Err(ZcashAdapterError::InvalidViewingKey(
+        "expected a valid UFVK or UIVK for the requested network".into(),
+    ))
 }

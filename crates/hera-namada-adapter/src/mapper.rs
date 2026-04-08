@@ -53,7 +53,7 @@ pub fn map_note_to_canonical(
         event_type,
         txid: note.txid.clone(),
         block_height: note.block_height,
-        timestamp: chrono::Utc::now(),
+        timestamp: note.timestamp,
         asset: note.asset.clone(),
         // MASP values remain raw integer strings inside the adapter. Decimal
         // normalization happens one layer up where asset precision policy lives.

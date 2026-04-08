@@ -25,6 +25,7 @@ pub fn detect_owned_notes(
             Ok(MaspNote {
                 txid: entry.txid.clone(),
                 block_height: entry.block_height,
+                timestamp: entry.timestamp,
                 asset: Asset {
                     symbol: entry
                         .asset_symbol

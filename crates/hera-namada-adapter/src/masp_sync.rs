@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -134,6 +135,7 @@ struct ShieldedSyncResponse {
 pub(crate) struct ShieldedEntry {
     pub txid: String,
     pub block_height: u64,
+    pub timestamp: DateTime<Utc>,
     pub asset_id: String,
     pub asset_symbol: Option<String>,
     pub asset_decimals: Option<u8>,
