@@ -1,0 +1,4 @@
+[toolchain]
+# Pin to stable. This prevents CI surprises from toolchain updates.
+channel = "stable"
+components = ["rustfmt", "clippy"]

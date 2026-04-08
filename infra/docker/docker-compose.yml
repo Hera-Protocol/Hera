@@ -1,0 +1,52 @@
+# Hera Stage 1 runs on a single bridge network so local services can resolve
+# each other by name without leaking ports beyond the development machine.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hera-postgres
+    ports:
+      # Expose Postgres on the default port so app env vars match production-style URLs.
+      - "5432:5432"
+    environment:
+      # Fixed credentials keep local onboarding deterministic and match the root env template.
+      POSTGRES_DB: hera
+      POSTGRES_USER: hera
+      POSTGRES_PASSWORD: devpassword
+    volumes:
+      # Persist database state across container restarts so developers do not lose cases and migrations on every reboot.
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - hera-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: hera-redis
+    ports:
+      # Expose Redis on its standard port so workers and the API can share the same local queue URL.
+      - "6379:6379"
+    networks:
+      - hera-net
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: hera-localstack
+    ports:
+      # LocalStack emulates AWS APIs locally so S3 and KMS flows can be exercised without real cloud credentials.
+      - "4566:4566"
+    environment:
+      # Restrict LocalStack to the AWS services Hera Stage 1 actually needs to keep startup lighter and intent explicit.
+      SERVICES: s3,kms
+      AWS_DEFAULT_REGION: us-east-1
+    volumes:
+      # Persist LocalStack state so buckets and KMS aliases survive routine restarts during development.
+      - localstack-data:/var/lib/localstack
+    networks:
+      - hera-net
+
+networks:
+  hera-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  localstack-data:
