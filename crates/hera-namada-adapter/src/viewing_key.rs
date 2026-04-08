@@ -43,3 +43,26 @@ pub fn parse_and_validate(
         birthday_height: None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_and_validate;
+
+    #[test]
+    fn accepts_bech32_like_viewing_keys() {
+        let result = parse_and_validate("zvknam1qqqqqqqqqqqqqqqqq", "namada");
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_inputs() {
+        assert!(parse_and_validate("", "namada").is_err());
+        assert!(parse_and_validate("zvknam1qqqqqqqqqqqqqqqqq", "").is_err());
+    }
+
+    #[test]
+    fn rejects_obviously_malformed_keys() {
+        assert!(parse_and_validate("bad-key", "namada").is_err());
+    }
+}

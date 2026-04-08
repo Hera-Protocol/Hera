@@ -75,3 +75,57 @@ pub fn map_note_to_canonical(
         notes,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+    use hera_types::Asset;
+
+    use crate::{
+        map_note_to_canonical,
+        types::{FeeRecord, MaspNote, TransferDirection},
+    };
+
+    fn ts(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> chrono::DateTime<Utc> {
+        match Utc.with_ymd_and_hms(year, month, day, hour, min, sec) {
+            chrono::LocalResult::Single(value) => value,
+            other => panic!("unexpected timestamp result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn keeps_fee_context_separate_in_notes() {
+        let note = MaspNote {
+            txid: "nam-tx-1".into(),
+            block_height: 77,
+            timestamp: ts(2025, 4, 5, 6, 7, 8),
+            asset: Asset {
+                symbol: "NAM".into(),
+                asset_id: "nam".into(),
+                decimals: 6,
+            },
+            amount_raw: 1_500_000,
+            note_commitment: "commitment-1".into(),
+        };
+        let fee = FeeRecord {
+            asset: Asset {
+                symbol: "NAM".into(),
+                asset_id: "nam".into(),
+                decimals: 6,
+            },
+            amount_raw: 5000,
+            payer_transparent: Some("tnam1payer".into()),
+        };
+
+        let event = map_note_to_canonical(&note, TransferDirection::Shielded, Some(&fee), "m1");
+
+        assert!(event.is_ok());
+        let event = match event {
+            Ok(value) => value,
+            Err(err) => panic!("unexpected mapper error: {err}"),
+        };
+        assert_eq!(event.notes.len(), 2);
+        assert_eq!(event.event_type, hera_types::EventType::Shield);
+        assert_eq!(event.provenance.pool.as_deref(), Some("masp"));
+    }
+}

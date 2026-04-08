@@ -97,3 +97,55 @@ pub fn map_note_to_canonical(
         notes,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+    use hera_types::Network;
+
+    use crate::{
+        map_note_to_canonical,
+        mapper::TxMeta,
+        types::{MemoVisibility, Pool, ZcashNote},
+    };
+
+    fn ts(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> chrono::DateTime<Utc> {
+        match Utc.with_ymd_and_hms(year, month, day, hour, min, sec) {
+            chrono::LocalResult::Single(value) => value,
+            other => panic!("unexpected timestamp result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn marks_encrypted_memo_without_claiming_plaintext() {
+        let note = ZcashNote {
+            txid: "tx-1".into(),
+            block_height: 10,
+            pool: Pool::Orchard,
+            amount_zatoshis: 55,
+            memo: MemoVisibility::Encrypted,
+            nullifier: None,
+        };
+        let meta = TxMeta {
+            txid: "tx-1".into(),
+            block_height: 10,
+            timestamp: ts(2025, 1, 1, 0, 0, 0),
+            network: Network::Testnet,
+        };
+
+        let event = map_note_to_canonical(&note, &meta, "scanner-1");
+
+        assert!(event.is_ok());
+        let event = match event {
+            Ok(value) => value,
+            Err(err) => panic!("unexpected mapper error: {err}"),
+        };
+        assert!(event.memo.present);
+        assert!(event.memo.hash.is_none());
+        assert_eq!(
+            event.notes,
+            vec!["memo was present but not decryptable during scan".to_string()]
+        );
+        assert_eq!(event.provenance.pool.as_deref(), Some("orchard"));
+    }
+}

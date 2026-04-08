@@ -123,3 +123,98 @@ fn convert_integer_to_decimal(raw: u128, decimals: u8) -> Result<String, Normali
         width = usize::from(decimals)
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+    use hera_namada_adapter::TransferDirection;
+    use hera_types::{Asset, ChainId, Network};
+
+    use super::{
+        convert_raw_to_decimal, convert_zatoshis_to_decimal, normalize_namada_note,
+        normalize_zcash_note, NormalizationContext,
+    };
+
+    fn test_context(chain: ChainId) -> NormalizationContext {
+        NormalizationContext {
+            case_id: match uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111") {
+                Ok(value) => value,
+                Err(err) => panic!("failed to construct test uuid: {err}"),
+            },
+            chain,
+            network: Network::Testnet,
+            scan_engine_version: "test-engine".into(),
+        }
+    }
+
+    fn ts(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> chrono::DateTime<Utc> {
+        match Utc.with_ymd_and_hms(year, month, day, hour, min, sec) {
+            chrono::LocalResult::Single(value) => value,
+            other => panic!("unexpected timestamp result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn converts_zatoshis_exactly() {
+        assert_eq!(convert_zatoshis_to_decimal(125_000_000).unwrap(), "1.25000000");
+        assert_eq!(convert_zatoshis_to_decimal(42).unwrap(), "0.00000042");
+    }
+
+    #[test]
+    fn converts_raw_integer_amounts_exactly() {
+        assert_eq!(convert_raw_to_decimal(123_456u128, 3).unwrap(), "123.456");
+        assert_eq!(convert_raw_to_decimal(5u128, 0).unwrap(), "5");
+    }
+
+    #[test]
+    fn normalizes_zcash_note_into_canonical_event() {
+        let note = hera_zcash_adapter::ZcashNote {
+            txid: "deadbeef".into(),
+            block_height: 42,
+            pool: hera_zcash_adapter::Pool::Sapling,
+            amount_zatoshis: 125_000_000,
+            memo: hera_zcash_adapter::MemoVisibility::Absent,
+            nullifier: None,
+        };
+        let tx_meta = hera_zcash_adapter::TxMeta {
+            txid: "deadbeef".into(),
+            block_height: 42,
+            timestamp: ts(2025, 1, 2, 3, 4, 5),
+            network: Network::Testnet,
+        };
+
+        let event = normalize_zcash_note(note, tx_meta, &test_context(ChainId::Zcash)).unwrap();
+
+        assert_eq!(event.amount, "1.25000000");
+        assert_eq!(event.case_id.to_string(), "11111111-1111-1111-1111-111111111111");
+        assert_eq!(event.evidence_refs, vec!["compactblock:42:deadbeef".to_string()]);
+    }
+
+    #[test]
+    fn normalizes_namada_note_into_canonical_event() {
+        let note = hera_namada_adapter::MaspNote {
+            txid: "nam-tx-1".into(),
+            block_height: 99,
+            timestamp: ts(2025, 2, 3, 4, 5, 6),
+            asset: Asset {
+                symbol: "NAM".into(),
+                asset_id: "nam".into(),
+                decimals: 6,
+            },
+            amount_raw: 1_250_000,
+            note_commitment: "commitment-1".into(),
+        };
+
+        let event = normalize_namada_note(
+            note,
+            TransferDirection::Shielded,
+            None,
+            &test_context(ChainId::Namada),
+        )
+        .unwrap();
+
+        assert_eq!(event.amount, "1.250000");
+        assert_eq!(event.evidence_refs, vec!["indexer:tx/nam-tx-1:nam-tx-1".to_string()]);
+        assert_eq!(event.network, Network::Testnet);
+    }
+}

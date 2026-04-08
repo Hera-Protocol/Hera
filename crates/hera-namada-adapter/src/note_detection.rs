@@ -40,3 +40,81 @@ pub fn detect_owned_notes(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+
+    use crate::{
+        detect_owned_notes,
+        masp_sync::{ShieldedContext, ShieldedEntry},
+        viewing_key::ValidatedNamadaKey,
+    };
+
+    fn ts(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> chrono::DateTime<Utc> {
+        match Utc.with_ymd_and_hms(year, month, day, hour, min, sec) {
+            chrono::LocalResult::Single(value) => value,
+            other => panic!("unexpected timestamp result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn detects_owned_notes_from_indexer_entries() {
+        let context = ShieldedContext::new(
+            vec![ShieldedEntry {
+                txid: "tx-1".into(),
+                block_height: 7,
+                timestamp: ts(2025, 3, 4, 5, 6, 7),
+                asset_id: "ibc/asset-1".into(),
+                asset_symbol: Some("ATOM".into()),
+                asset_decimals: Some(6),
+                amount_raw: "4200000".into(),
+                note_commitment: "commitment-1".into(),
+            }],
+            3,
+            7,
+        );
+        let key = ValidatedNamadaKey {
+            raw_key: "zvknam1exampleexample".into(),
+            chain_id: "namada".into(),
+            birthday_height: Some(1),
+        };
+
+        let result = detect_owned_notes(&context, &key);
+
+        assert!(result.is_ok());
+        let notes = match result {
+            Ok(value) => value,
+            Err(err) => panic!("unexpected detection error: {err}"),
+        };
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].asset.symbol, "ATOM");
+        assert_eq!(notes[0].amount_raw, 4_200_000);
+        assert_eq!(notes[0].timestamp, ts(2025, 3, 4, 5, 6, 7));
+    }
+
+    #[test]
+    fn rejects_non_numeric_amounts() {
+        let context = ShieldedContext::new(
+            vec![ShieldedEntry {
+                txid: "tx-1".into(),
+                block_height: 7,
+                timestamp: ts(2025, 3, 4, 5, 6, 7),
+                asset_id: "nam".into(),
+                asset_symbol: Some("NAM".into()),
+                asset_decimals: Some(6),
+                amount_raw: "not-a-number".into(),
+                note_commitment: "commitment-1".into(),
+            }],
+            3,
+            7,
+        );
+        let key = ValidatedNamadaKey {
+            raw_key: "zvknam1exampleexample".into(),
+            chain_id: "namada".into(),
+            birthday_height: None,
+        };
+
+        assert!(detect_owned_notes(&context, &key).is_err());
+    }
+}

@@ -34,3 +34,34 @@ pub fn build_evidence_refs(chain: ChainId, refs: &[EvidenceRef]) -> Vec<String> 
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use hera_types::ChainId;
+
+    use super::{build_evidence_refs, EvidenceRef};
+
+    #[test]
+    fn builds_stable_evidence_refs_for_mixed_sources() {
+        let refs = build_evidence_refs(
+            ChainId::Namada,
+            &[
+                EvidenceRef::IndexerEntry {
+                    url: "tx/abc".into(),
+                    txid: "abc".into(),
+                },
+                EvidenceRef::DecryptionWitness {
+                    note_commitment: "commitment-1".into(),
+                },
+            ],
+        );
+
+        assert_eq!(
+            refs,
+            vec![
+                "indexer:tx/abc:abc".to_string(),
+                "decryption_witness:commitment-1".to_string()
+            ]
+        );
+    }
+}
