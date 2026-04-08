@@ -196,3 +196,30 @@ pub struct ScanJob {
     /// to identify without diffing audit logs.
     pub updated_at: DateTime<Utc>,
 }
+
+/// Represents the top-level compliance case because every scan, key import, and
+/// report must remain anchored to an explicit investigatory scope.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct Case {
+    /// Gives the case a durable identifier that all downstream artifacts and
+    /// audit records can reference consistently.
+    pub id: Uuid,
+    /// Ties the case to a workspace so tenant isolation and access control can be
+    /// enforced above the raw database layer.
+    pub workspace_id: Uuid,
+    /// Records which chain the case is authorized to inspect so cross-chain data
+    /// is never mixed under one ambiguous identifier.
+    pub chain: ChainId,
+    /// Records the network context to prevent test or local evidence from being
+    /// confused with production activity.
+    pub network: Network,
+    /// Leaves room for case-level workflow state without forcing the schema to
+    /// mirror the lower-level scan job lifecycle exactly.
+    pub status: String,
+    /// Records when the case was opened for auditability and operational aging.
+    pub created_at: DateTime<Utc>,
+    /// Records the last case-level mutation so external APIs can surface recent
+    /// state changes without scanning audit tables.
+    pub updated_at: DateTime<Utc>,
+}
