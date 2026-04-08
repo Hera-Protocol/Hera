@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+aws-config = "1"
 aws-sdk-s3 = "1"
 chrono.workspace = true
 ed25519-dalek = "2.1"
@@ -26,6 +27,5 @@ thiserror.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-aws-config = "1"
 sqlx.workspace = true
 tokio.workspace = true

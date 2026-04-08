@@ -80,8 +80,8 @@ pub async fn scan_case(
             priority: 5,
         },
     )
-        .await
-        .map_err(ApiError::internal)?;
+    .await
+    .map_err(ApiError::internal)?;
 
     Ok((
         axum::http::StatusCode::CREATED,

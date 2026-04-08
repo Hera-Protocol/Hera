@@ -1,35 +1,26 @@
+mod chain;
+mod context;
+
 use std::{future::Future, sync::Arc, time::Duration};
 
 use deadpool_redis::Pool as RedisPool;
 use ed25519_dalek::SigningKey;
-use hera_core::{normalize_namada_note, normalize_zcash_note, NormalizationContext};
 use hera_crypto::{decrypt_viewing_key, EncryptedViewingKey, KmsClient};
 use hera_db::{
     repos::{
         audit::{AuditAction, AuditEntry, AuditRepo},
-        cases::CaseRepo,
-        events::EventRepo,
         jobs::ScanJobRepo,
-        keys::{StoredViewingKey, ViewKeyRepo},
+        keys::StoredViewingKey,
     },
     DbPool,
 };
-use hera_namada_adapter::{
-    detect_owned_notes, parse_and_validate as parse_namada_view_key, MaspIndexerClient,
-    TransferDirection,
-};
-use hera_reporter::{build_manifest, build_pdf, ReportStorage};
-use hera_types::{Case, ChainId, ScanJobStatus};
-use hera_zcash_adapter::{parse_and_validate as parse_zcash_view_key, TxMeta, ZcashScanner};
+use hera_reporter::ReportStorage;
+use hera_types::ScanJobStatus;
 use rand::{thread_rng, Rng};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::{
-    checkpoint::{get_last_checkpoint, save_checkpoint},
-    config::Config,
-    error::OrchestratorError,
-};
+use crate::{config::Config, error::OrchestratorError};
 
 /// Drives the durable scan-job state machine for one queued job.
 pub struct ScanOrchestrator {
@@ -45,204 +36,39 @@ impl ScanOrchestrator {
     /// Processes one scan job end to end. Each state transition updates
     /// `scan_jobs`, appends an audit entry, and stops on the first failure.
     pub async fn process_job(&self, job_id: Uuid) -> Result<(), OrchestratorError> {
-        let jobs = ScanJobRepo::new(&self.db);
-        let cases = CaseRepo::new(&self.db);
-        let keys = ViewKeyRepo::new(&self.db);
-        let audits = AuditRepo::new(&self.db);
-        let events = EventRepo::new(&self.db);
-
-        let job = jobs
-            .get_scan_job_by_id(job_id)
-            .await?
-            .ok_or_else(|| OrchestratorError::MissingRecord(format!("scan job {job_id}")))?;
-        let case = cases
-            .get_case_by_id(job.case_id)
-            .await?
-            .ok_or_else(|| OrchestratorError::MissingRecord(format!("case {}", job.case_id)))?;
-        let stored_key = keys.get_view_key_for_case(case.id).await?.ok_or_else(|| {
-            OrchestratorError::MissingRecord(format!("view key for case {}", case.id))
-        })?;
+        let loaded = self.load_job_context(job_id).await?;
 
         let outcome: Result<(), OrchestratorError> = async {
             // KEY_VALIDATED decrypts the stored ciphertext and validates the key
             // before any network scan begins.
-            self.transition(job.id, ScanJobStatus::KeyValidated).await?;
-            self.append_audit(&audits, job.id, AuditAction::KeyRead)
+            self.transition(loaded.job.id, ScanJobStatus::KeyValidated)
                 .await?;
-            let decrypted_key = self.decrypt_view_key(&stored_key).await?;
-            let raw_key = std::str::from_utf8(&decrypted_key)
-                .map_err(|_| OrchestratorError::Queue("view key was not valid utf-8".into()))?;
+            self.append_audit(loaded.job.id, AuditAction::KeyRead)
+                .await?;
+            let validated_key = self.validate_chain_key(&loaded).await?;
 
-            match job.chain {
-                ChainId::Zcash => {
-                    let validated_key = parse_zcash_view_key(raw_key, job.network.clone())?;
-
-                    // CHAIN_SYNCING contacts lightwalletd and persists progress so
-                    // interrupted scans resume from the latest checkpoint.
-                    self.transition(job.id, ScanJobStatus::ChainSyncing).await?;
-                    self.append_audit(&audits, job.id, AuditAction::ScanStarted)
-                        .await?;
-                    let from_height = get_last_checkpoint(&self.db, case.id, job.chain.clone())
-                        .await?
-                        .or(stored_key.birthday_height)
-                        .or(validated_key.birthday_height.map(u64::from))
-                        .unwrap_or(0);
-                    let from_height = u32::try_from(from_height).map_err(|_| {
-                        OrchestratorError::Queue("zcash checkpoint overflow".into())
-                    })?;
-                    let scanner = ZcashScanner {
-                        lightwalletd_url: self.config.lightwalletd_url.clone(),
-                        network: job.network.clone(),
-                    };
-                    let to_height = self
-                        .with_retry("zcash chain tip", || {
-                            let scanner = &scanner;
-                            async move {
-                                scanner
-                                    .latest_block_height()
-                                    .await
-                                    .map_err(OrchestratorError::from)
-                            }
-                        })
-                        .await?;
-                    let notes = self
-                        .with_retry("zcash scan", || {
-                            let scanner = &scanner;
-                            let validated_key = validated_key.clone();
-                            let db = self.db.clone();
-                            let case_id = case.id;
-                            let chain = job.chain.clone();
-                            async move {
-                                scanner
-                                    .scan(&validated_key, from_height, to_height, |checkpoint| {
-                                        let db = db.clone();
-                                        let chain = chain.clone();
-                                        tokio::spawn(async move {
-                                            let _ = save_checkpoint(
-                                                &db,
-                                                case_id,
-                                                chain,
-                                                u64::from(checkpoint.last_scanned_height),
-                                            )
-                                            .await;
-                                        });
-                                    })
-                                    .await
-                                    .map_err(OrchestratorError::from)
-                            }
-                        })
-                        .await?;
-
-                    // DETECTING_NOTES is explicit even for Zcash because trial
-                    // decryption and ownership checks are their own failure domain.
-                    self.transition(job.id, ScanJobStatus::DetectingNotes)
-                        .await?;
-
-                    // CLASSIFYING_FLOWS normalizes adapter notes into canonical
-                    // events and stores them idempotently.
-                    self.transition(job.id, ScanJobStatus::ClassifyingFlows)
-                        .await?;
-                    let ctx = NormalizationContext {
-                        case_id: case.id,
-                        chain: ChainId::Zcash,
-                        network: case.network.clone(),
-                        scan_engine_version: self.config.scan_engine_version.clone(),
-                    };
-
-                    for note in notes {
-                        let event = normalize_zcash_note(
-                            note.clone(),
-                            TxMeta {
-                                txid: note.txid.clone(),
-                                block_height: note.block_height,
-                                timestamp: chrono::Utc::now(),
-                                network: case.network.clone(),
-                            },
-                            &ctx,
-                        )?;
-                        events.insert_canonical_event(&event).await?;
-                    }
-                }
-                ChainId::Namada => {
-                    let validated_key = parse_namada_view_key(raw_key, "namada")?;
-
-                    self.transition(job.id, ScanJobStatus::ChainSyncing).await?;
-                    self.append_audit(&audits, job.id, AuditAction::ScanStarted)
-                        .await?;
-                    let from_block = get_last_checkpoint(&self.db, case.id, job.chain.clone())
-                        .await?
-                        .or(stored_key.birthday_height)
-                        .or(validated_key.birthday_height)
-                        .unwrap_or(0);
-                    let client = MaspIndexerClient {
-                        indexer_url: self.config.namada_indexer_url.clone(),
-                    };
-                    let context = self
-                        .with_retry("namada sync", || {
-                            let client = &client;
-                            let validated_key = validated_key.clone();
-                            let db = self.db.clone();
-                            let case_id = case.id;
-                            let chain = job.chain.clone();
-                            async move {
-                                client
-                                    .fetch_shielded_context(
-                                        &validated_key,
-                                        from_block,
-                                        |checkpoint| {
-                                            let db = db.clone();
-                                            let chain = chain.clone();
-                                            tokio::spawn(async move {
-                                                let _ = save_checkpoint(
-                                                    &db,
-                                                    case_id,
-                                                    chain,
-                                                    checkpoint.last_synced_block,
-                                                )
-                                                .await;
-                                            });
-                                        },
-                                    )
-                                    .await
-                                    .map_err(OrchestratorError::from)
-                            }
-                        })
-                        .await?;
-
-                    self.transition(job.id, ScanJobStatus::DetectingNotes)
-                        .await?;
-                    let notes = detect_owned_notes(&context, &validated_key)?;
-
-                    self.transition(job.id, ScanJobStatus::ClassifyingFlows)
-                        .await?;
-                    let ctx = NormalizationContext {
-                        case_id: case.id,
-                        chain: ChainId::Namada,
-                        network: case.network.clone(),
-                        scan_engine_version: self.config.scan_engine_version.clone(),
-                    };
-
-                    for note in notes {
-                        let event =
-                            normalize_namada_note(note, TransferDirection::Shielded, None, &ctx)?;
-                        events.insert_canonical_event(&event).await?;
-                    }
-                }
-            }
+            // CHAIN_SYNCING contacts the chain-specific remote and persists
+            // progress so interrupted scans resume from the latest checkpoint.
+            self.transition(loaded.job.id, ScanJobStatus::ChainSyncing)
+                .await?;
+            self.append_audit(loaded.job.id, AuditAction::ScanStarted)
+                .await?;
+            self.run_chain_scan(&loaded, validated_key).await?;
 
             // BUILDING_REPORT is explicit because artifact generation can fail
             // independently of scanning and normalization.
-            self.transition(job.id, ScanJobStatus::BuildingReport)
+            self.transition(loaded.job.id, ScanJobStatus::BuildingReport)
                 .await?;
-            self.build_report(&case).await?;
-            self.append_audit(&audits, job.id, AuditAction::ReportExported)
+            self.finalize_report(&loaded.case).await?;
+            self.append_audit(loaded.job.id, AuditAction::ReportExported)
                 .await?;
 
             // SIGNED records successful artifact completion. Prompt 9 will wire
             // the stored artifacts and detached signature behind a final durable
             // job-state transition.
-            self.transition(job.id, ScanJobStatus::Signed).await?;
-            self.append_audit(&audits, job.id, AuditAction::StatusChanged)
+            self.transition(loaded.job.id, ScanJobStatus::Signed)
+                .await?;
+            self.append_audit(loaded.job.id, AuditAction::StatusChanged)
                 .await?;
             Ok(())
         }
@@ -250,9 +76,11 @@ impl ScanOrchestrator {
 
         if let Err(err) = outcome {
             let reason = err.to_string();
-            let _ = self.transition(job.id, ScanJobStatus::Failed(reason)).await;
             let _ = self
-                .append_audit(&audits, job.id, AuditAction::StatusChanged)
+                .transition(loaded.job.id, ScanJobStatus::Failed(reason))
+                .await;
+            let _ = self
+                .append_audit(loaded.job.id, AuditAction::StatusChanged)
                 .await;
             return Err(err);
         }
@@ -276,20 +104,20 @@ impl ScanOrchestrator {
 
     async fn append_audit(
         &self,
-        repo: &AuditRepo<'_>,
         job_id: Uuid,
         action: AuditAction,
     ) -> Result<(), OrchestratorError> {
-        repo.append_audit_log(AuditEntry {
-            actor_id: job_id,
-            action,
-            resource_id: job_id,
-            resource_type: "scan_job".to_string(),
-            ip_addr: None,
-            metadata: serde_json::json!({}),
-            occurred_at: None,
-        })
-        .await?;
+        AuditRepo::new(&self.db)
+            .append_audit_log(AuditEntry {
+                actor_id: job_id,
+                action,
+                resource_id: job_id,
+                resource_type: "scan_job".to_string(),
+                ip_addr: None,
+                metadata: serde_json::json!({}),
+                occurred_at: None,
+            })
+            .await?;
         Ok(())
     }
 
@@ -306,18 +134,6 @@ impl ScanOrchestrator {
         decrypt_viewing_key(self.crypto.as_ref(), &encrypted)
             .await
             .map_err(OrchestratorError::from)
-    }
-
-    async fn build_report(&self, case: &Case) -> Result<(), OrchestratorError> {
-        let events = EventRepo::new(&self.db)
-            .get_events_for_case(case.id)
-            .await?;
-        let manifest = build_manifest(case, &events, self.report_signing_key.as_ref())?;
-        let pdf = build_pdf(&manifest, case)?;
-        self.report_storage
-            .store_report(case.id, &manifest, &pdf)
-            .await?;
-        Ok(())
     }
 
     async fn with_retry<T, F, Fut>(

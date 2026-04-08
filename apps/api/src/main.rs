@@ -1,10 +1,9 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_config::{BehaviorVersion, Region};
 use deadpool_redis::{Config as RedisConfig, Runtime};
 use hera_api::{config::Config, router::build_router, state::AppState};
 use hera_crypto::{KmsClient, LocalDevKms};
-use hera_reporter::ReportStorage;
+use hera_reporter::{build_s3_client, ReportStorage};
 use tracing::info;
 
 #[tokio::main(flavor = "multi_thread")]
@@ -22,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
         RedisConfig::from_url(config.redis_url.clone()).create_pool(Some(Runtime::Tokio1))?;
     let crypto: Arc<dyn KmsClient> = Arc::new(LocalDevKms::from_env()?);
     let report_storage = Arc::new(ReportStorage::new(
-        build_s3_client(&config).await,
+        build_s3_client(&config.aws_region, config.aws_endpoint_url.as_deref()).await,
         config.report_bucket.clone(),
         db.clone(),
         None,
@@ -42,18 +41,4 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, router).await?;
     Ok(())
-}
-
-async fn build_s3_client(config: &Config) -> aws_sdk_s3::Client {
-    let shared_config = aws_config::defaults(BehaviorVersion::latest())
-        .region(Region::new(config.aws_region.clone()))
-        .load()
-        .await;
-
-    let mut builder = aws_sdk_s3::config::Builder::from(&shared_config);
-    if let Some(endpoint_url) = &config.aws_endpoint_url {
-        builder = builder.endpoint_url(endpoint_url).force_path_style(true);
-    }
-
-    aws_sdk_s3::Client::from_conf(builder.build())
 }

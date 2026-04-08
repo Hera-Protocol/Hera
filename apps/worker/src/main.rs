@@ -9,12 +9,11 @@ use std::sync::{
     Arc,
 };
 
-use aws_config::{BehaviorVersion, Region};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use deadpool_redis::{Config as RedisConfig, Runtime};
 use ed25519_dalek::SigningKey;
 use hera_crypto::{KmsClient, LocalDevKms};
-use hera_reporter::ReportStorage;
+use hera_reporter::{build_s3_client, ReportStorage};
 use tokio::sync::watch;
 use tracing::{error, info};
 
@@ -36,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     let crypto: Arc<dyn KmsClient> = Arc::new(LocalDevKms::from_env()?);
     let signing_key = Arc::new(load_signing_key_from_env()?);
     let report_storage = Arc::new(ReportStorage::new(
-        build_s3_client(&config).await,
+        build_s3_client(&config.aws_region, config.aws_endpoint_url.as_deref()).await,
         config.report_bucket.clone(),
         db.clone(),
         config.report_kms_key_id.clone(),
@@ -134,20 +133,6 @@ async fn wait_for_shutdown_signal() {
     {
         let _ = tokio::signal::ctrl_c().await;
     }
-}
-
-async fn build_s3_client(config: &Config) -> aws_sdk_s3::Client {
-    let shared_config = aws_config::defaults(BehaviorVersion::latest())
-        .region(Region::new(config.aws_region.clone()))
-        .load()
-        .await;
-
-    let mut builder = aws_sdk_s3::config::Builder::from(&shared_config);
-    if let Some(endpoint_url) = &config.aws_endpoint_url {
-        builder = builder.endpoint_url(endpoint_url).force_path_style(true);
-    }
-
-    aws_sdk_s3::Client::from_conf(builder.build())
 }
 
 fn load_signing_key_from_env() -> anyhow::Result<SigningKey> {

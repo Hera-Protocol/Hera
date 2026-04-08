@@ -1,11 +1,7 @@
 use chrono::{TimeZone, Utc};
 use ed25519_dalek::SigningKey;
 use hera_db::{
-    repos::{
-        cases::CaseRepo,
-        reports::ReportRepo,
-        workspaces::WorkspaceRepo,
-    },
+    repos::{cases::CaseRepo, reports::ReportRepo, workspaces::WorkspaceRepo},
     DbPool,
 };
 use hera_reporter::{build_manifest, build_pdf, ReportStorage};
@@ -184,7 +180,10 @@ async fn stores_report_artifacts_in_localstack_and_db() {
     assert!(!loaded_json.is_empty());
     assert!(!loaded_pdf.is_empty());
 
-    let persisted = match ReportRepo::new(&db).get_report_artifacts_for_case(case.id).await {
+    let persisted = match ReportRepo::new(&db)
+        .get_report_artifacts_for_case(case.id)
+        .await
+    {
         Ok(Some(value)) => value,
         Ok(None) => panic!("expected persisted report refs"),
         Err(err) => panic!("failed to read persisted report refs: {err}"),

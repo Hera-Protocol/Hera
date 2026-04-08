@@ -67,12 +67,7 @@ async fn repo_round_trip_persists_cases_events_jobs_and_keys() {
     };
 
     let case = match CaseRepo::new(&pool)
-        .create_case(
-            workspace.id,
-            ChainId::Zcash,
-            Network::Testnet,
-            "created",
-        )
+        .create_case(workspace.id, ChainId::Zcash, Network::Testnet, "created")
         .await
     {
         Ok(value) => value,
