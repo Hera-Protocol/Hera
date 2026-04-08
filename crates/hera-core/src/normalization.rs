@@ -78,7 +78,7 @@ pub fn normalize_namada_note(
 
     let mut event =
         map_namada_note_to_canonical(&note, direction, fee.as_ref(), &ctx.scan_engine_version)
-        .map_err(|err| NormalizationError::UnsupportedEventType(err.to_string()))?;
+            .map_err(|err| NormalizationError::UnsupportedEventType(err.to_string()))?;
     event.case_id = ctx.case_id;
     event.chain = ctx.chain.clone();
     event.network = ctx.network.clone();

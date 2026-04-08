@@ -29,14 +29,12 @@ async fn main() -> anyhow::Result<()> {
     let redis =
         RedisConfig::from_url(config.redis_url.clone()).create_pool(Some(Runtime::Tokio1))?;
     let crypto: Arc<dyn KmsClient> = Arc::new(LocalDevKms::from_env()?);
-    let report_storage = Arc::new(
-        ReportStorage::new(
-            build_s3_client(&config).await,
-            config.report_bucket.clone(),
-            db.clone(),
-            None,
-        ),
-    );
+    let report_storage = Arc::new(ReportStorage::new(
+        build_s3_client(&config).await,
+        config.report_bucket.clone(),
+        db.clone(),
+        None,
+    ));
     let state = AppState {
         db,
         redis,

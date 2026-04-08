@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use deadpool_redis::Pool as RedisPool;
 use hera_crypto::KmsClient;
-use hera_reporter::ReportStorage;
 use hera_db::DbPool;
+use hera_reporter::ReportStorage;
 use uuid::Uuid;
 
 /// Shared application state passed to handlers and middleware.

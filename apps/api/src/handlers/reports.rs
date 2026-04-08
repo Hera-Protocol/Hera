@@ -88,14 +88,11 @@ fn artifact_response(
     body: Vec<u8>,
 ) -> Response {
     let mut response = (status, body).into_response();
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static(content_type),
-    );
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
     if let Ok(value) = HeaderValue::from_str(sha256) {
-        response
-            .headers_mut()
-            .insert("x-artifact-sha256", value);
+        response.headers_mut().insert("x-artifact-sha256", value);
     }
     response
 }

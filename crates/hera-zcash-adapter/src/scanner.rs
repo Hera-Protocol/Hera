@@ -4,8 +4,7 @@ use chrono::Utc;
 use futures_util::StreamExt;
 use hera_types::Network;
 use orchard::{
-    keys::IncomingViewingKey as OrchardIncomingViewingKey,
-    note::Nullifier as OrchardNullifier,
+    keys::IncomingViewingKey as OrchardIncomingViewingKey, note::Nullifier as OrchardNullifier,
     note_encryption::OrchardDomain,
 };
 use sapling::{
@@ -14,7 +13,9 @@ use sapling::{
 };
 use zcash_client_backend::proto::{
     compact_formats::CompactBlock,
-    service::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, ChainSpec, Empty},
+    service::{
+        compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, ChainSpec, Empty,
+    },
 };
 use zcash_client_backend::{
     data_api::BlockMetadata,
@@ -126,10 +127,16 @@ impl ZcashScanner {
             blocks_since_checkpoint = blocks_since_checkpoint.saturating_add(1);
             if blocks_since_checkpoint >= 100 {
                 checkpoint_cb(ZcashScanCheckpoint {
-                    last_scanned_height: u32::from(prior_block_metadata
-                        .as_ref()
-                        .ok_or_else(|| ZcashAdapterError::ScanFailed("missing scanned block metadata".into()))?
-                        .block_height()),
+                    last_scanned_height: u32::from(
+                        prior_block_metadata
+                            .as_ref()
+                            .ok_or_else(|| {
+                                ZcashAdapterError::ScanFailed(
+                                    "missing scanned block metadata".into(),
+                                )
+                            })?
+                            .block_height(),
+                    ),
                     scanned_at: Utc::now(),
                 });
                 blocks_since_checkpoint = 0;
@@ -194,10 +201,14 @@ impl ZcashScanner {
         prior_block_metadata: Option<&BlockMetadata>,
     ) -> Result<zcash_client_backend::data_api::ScannedBlock<u32>, ZcashAdapterError> {
         let uivk = self.decode_uivk(&key.raw_key)?;
-        let mut sapling_keys: HashMap<u8, Box<dyn ScanningKeyOps<SaplingDomain, u32, SaplingNullifier>>> =
-            HashMap::new();
-        let mut orchard_keys: HashMap<u8, Box<dyn ScanningKeyOps<OrchardDomain, u32, OrchardNullifier>>> =
-            HashMap::new();
+        let mut sapling_keys: HashMap<
+            u8,
+            Box<dyn ScanningKeyOps<SaplingDomain, u32, SaplingNullifier>>,
+        > = HashMap::new();
+        let mut orchard_keys: HashMap<
+            u8,
+            Box<dyn ScanningKeyOps<OrchardDomain, u32, OrchardNullifier>>,
+        > = HashMap::new();
 
         if let Some(sapling_ivk) = uivk.sapling().clone() {
             sapling_keys.insert(
@@ -342,7 +353,11 @@ impl ScanningKeyOps<SaplingDomain, u32, SaplingNullifier> for IncomingSaplingSca
         None
     }
 
-    fn nf(&self, _note: &sapling::Note, _note_position: incrementalmerkletree::Position) -> Option<SaplingNullifier> {
+    fn nf(
+        &self,
+        _note: &sapling::Note,
+        _note_position: incrementalmerkletree::Position,
+    ) -> Option<SaplingNullifier> {
         None
     }
 }

@@ -309,7 +309,9 @@ impl ScanOrchestrator {
     }
 
     async fn build_report(&self, case: &Case) -> Result<(), OrchestratorError> {
-        let events = EventRepo::new(&self.db).get_events_for_case(case.id).await?;
+        let events = EventRepo::new(&self.db)
+            .get_events_for_case(case.id)
+            .await?;
         let manifest = build_manifest(case, &events, self.report_signing_key.as_ref())?;
         let pdf = build_pdf(&manifest, case)?;
         self.report_storage

@@ -35,14 +35,12 @@ async fn main() -> anyhow::Result<()> {
         RedisConfig::from_url(config.redis_url.clone()).create_pool(Some(Runtime::Tokio1))?;
     let crypto: Arc<dyn KmsClient> = Arc::new(LocalDevKms::from_env()?);
     let signing_key = Arc::new(load_signing_key_from_env()?);
-    let report_storage = Arc::new(
-        ReportStorage::new(
-            build_s3_client(&config).await,
-            config.report_bucket.clone(),
-            db.clone(),
-            config.report_kms_key_id.clone(),
-        ),
-    );
+    let report_storage = Arc::new(ReportStorage::new(
+        build_s3_client(&config).await,
+        config.report_bucket.clone(),
+        db.clone(),
+        config.report_kms_key_id.clone(),
+    ));
 
     // We run multiple worker tasks not multiple processes in Stage 1. Stage 4
     // will scale to separate worker pods.
@@ -153,8 +151,8 @@ async fn build_s3_client(config: &Config) -> aws_sdk_s3::Client {
 }
 
 fn load_signing_key_from_env() -> anyhow::Result<SigningKey> {
-    let seed_b64 =
-        std::env::var("SIGNING_KEY_BASE64").map_err(|_| anyhow::anyhow!("missing SIGNING_KEY_BASE64"))?;
+    let seed_b64 = std::env::var("SIGNING_KEY_BASE64")
+        .map_err(|_| anyhow::anyhow!("missing SIGNING_KEY_BASE64"))?;
     let seed = BASE64_STANDARD
         .decode(seed_b64.trim())
         .map_err(|err| anyhow::anyhow!("invalid SIGNING_KEY_BASE64: {err}"))?;
