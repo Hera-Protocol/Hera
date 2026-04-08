@@ -21,3 +21,6 @@ zcash_client_backend = { version = "0.21.2", default-features = false, features 
 zcash_keys = "0.12.0"
 zcash_protocol = "0.7.2"
 zip32 = "0.2.1"
+
+[dev-dependencies]
+tokio.workspace = true

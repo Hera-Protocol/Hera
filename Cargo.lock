@@ -1941,6 +1941,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
  "uuid",
 ]
 
@@ -2018,6 +2019,7 @@ dependencies = [
  "sapling-crypto",
  "serde",
  "thiserror 1.0.69",
+ "tokio",
  "uuid",
  "zcash_client_backend",
  "zcash_keys",

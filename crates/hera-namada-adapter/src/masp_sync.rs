@@ -49,7 +49,38 @@ pub struct MaspIndexerClient {
     pub indexer_url: String,
 }
 
+/// Captures the indexer's latest processed cursor so callers can distinguish
+/// endpoint reachability from full MASP sync behavior.
+#[derive(Debug, Clone)]
+pub struct IndexerCursor {
+    pub epoch: u64,
+    pub height: u64,
+}
+
 impl MaspIndexerClient {
+    /// Reads the indexer's latest block cursor from `GET /api/v1/block/latest`
+    /// so smoke tests and orchestration can confirm the service is reachable
+    /// before asking it for heavier MASP context.
+    pub async fn latest_indexed_block(&self) -> Result<IndexerCursor, NamadaAdapterError> {
+        let client = Client::new();
+        let base = self.indexer_url.trim_end_matches('/');
+        let latest = client
+            .get(format!("{base}/api/v1/block/latest"))
+            .send()
+            .await
+            .map_err(|err| NamadaAdapterError::IndexerUnavailable(err.to_string()))?
+            .error_for_status()
+            .map_err(|err| NamadaAdapterError::IndexerUnavailable(err.to_string()))?
+            .json::<LatestBlockResponse>()
+            .await
+            .map_err(|err| NamadaAdapterError::MaspSyncFailed(err.to_string()))?;
+
+        Ok(IndexerCursor {
+            epoch: latest.epoch,
+            height: latest.height,
+        })
+    }
+
     /// Fetches the pre-filtered shielded context for a viewing key. We call
     /// `GET /api/v1/block/latest` first to learn the indexer's current cursor,
     /// then `POST /api/v1/masp/sync` to request MASP-relevant entries for the
@@ -66,17 +97,7 @@ impl MaspIndexerClient {
     {
         let client = Client::new();
         let base = self.indexer_url.trim_end_matches('/');
-
-        let latest = client
-            .get(format!("{base}/api/v1/block/latest"))
-            .send()
-            .await
-            .map_err(|err| NamadaAdapterError::IndexerUnavailable(err.to_string()))?
-            .error_for_status()
-            .map_err(|err| NamadaAdapterError::IndexerUnavailable(err.to_string()))?
-            .json::<LatestBlockResponse>()
-            .await
-            .map_err(|err| NamadaAdapterError::MaspSyncFailed(err.to_string()))?;
+        let latest = self.latest_indexed_block().await?;
 
         let response = client
             .post(format!("{base}/api/v1/masp/sync"))
