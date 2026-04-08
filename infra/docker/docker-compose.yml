@@ -28,7 +28,9 @@ services:
       - hera-net
 
   localstack:
-    image: localstack/localstack:latest
+    # Pin the LocalStack image so development and CI do not silently inherit
+    # breaking behavior changes from the floating latest tag.
+    image: localstack/localstack:4.12.0
     container_name: hera-localstack
     ports:
       # LocalStack emulates AWS APIs locally so S3 and KMS flows can be exercised without real cloud credentials.
@@ -36,6 +38,8 @@ services:
     environment:
       # Restrict LocalStack to the AWS services Hera Stage 1 actually needs to keep startup lighter and intent explicit.
       SERVICES: s3,kms
+      # Newer LocalStack images default toward Pro activation. We force community-mode behavior in development so tests do not require a paid auth token.
+      ACTIVATE_PRO: "0"
       AWS_DEFAULT_REGION: us-east-1
     volumes:
       # Persist LocalStack state so buckets and KMS aliases survive routine restarts during development.

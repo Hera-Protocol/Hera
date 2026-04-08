@@ -5,6 +5,11 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+# Reporter is consumed by services and integration tests. We keep coverage in
+# unit and integration tests rather than rustdoc snippets.
+doctest = false
+
 [dependencies]
 aws-sdk-s3 = "1"
 chrono.workspace = true
@@ -19,3 +24,8 @@ serde_json.workspace = true
 sha2 = "0.10"
 thiserror.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+aws-config = "1"
+sqlx.workspace = true
+tokio.workspace = true
