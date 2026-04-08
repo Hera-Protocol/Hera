@@ -14,6 +14,7 @@ pub struct AppState {
     pub crypto: Arc<dyn KmsClient>,
     pub report_storage: Arc<ReportStorage>,
     pub kms_key_ref: String,
+    pub scan_queue_name: String,
 }
 
 /// Carries the authenticated tenant identity. Every request carries a tenant

@@ -5,6 +5,11 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+# This crate exists to share the API runtime surface with integration tests.
+# We do not maintain rustdoc examples here, so doctests only add CI friction.
+doctest = false
+
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
@@ -15,6 +20,7 @@ hera-crypto = { path = "../../crates/hera-crypto" }
 hera-db = { path = "../../crates/hera-db" }
 hera-reporter = { path = "../reporter" }
 hera-types = { path = "../../crates/hera-types" }
+hera-worker = { path = "../worker" }
 redis = { version = "0.27", features = ["tokio-comp"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -25,3 +31,8 @@ tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uuid.workspace = true
 zeroize = "1.8"
+
+[dev-dependencies]
+http-body-util = "0.1"
+sqlx.workspace = true
+tower = { version = "0.5", features = ["util"] }

@@ -10,6 +10,7 @@ use hera_db::repos::{
     tenancy::TenancyRepo,
 };
 use hera_types::{CanonicalEvent, ChainId, Network, ScanJobStatus};
+use hera_worker::jobs::scan_job::{enqueue, ScanJobMessage};
 
 use crate::{
     error::ApiError,
@@ -69,17 +70,16 @@ pub async fn scan_case(
         .await
         .map_err(ApiError::internal)?;
 
-    let message = serde_json::json!({
-        "job_id": job.id,
-        "case_id": case.id,
-        "chain": case.chain,
-        "priority": 5u8,
-    });
-    let mut conn = state.redis.get().await.map_err(ApiError::internal)?;
-    let _: i64 = redis::cmd("LPUSH")
-        .arg("hera:scan:pending")
-        .arg(serde_json::to_string(&message).map_err(ApiError::internal)?)
-        .query_async(&mut conn)
+    enqueue(
+        &state.redis,
+        &state.scan_queue_name,
+        &ScanJobMessage {
+            job_id: job.id,
+            case_id: case.id,
+            chain: case.chain,
+            priority: 5,
+        },
+    )
         .await
         .map_err(ApiError::internal)?;
 

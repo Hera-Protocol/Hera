@@ -1,19 +1,11 @@
-mod config;
-mod error;
-mod handlers;
-mod middleware;
-mod router;
-mod state;
-
 use std::{net::SocketAddr, sync::Arc};
 
 use aws_config::{BehaviorVersion, Region};
 use deadpool_redis::{Config as RedisConfig, Runtime};
+use hera_api::{config::Config, router::build_router, state::AppState};
 use hera_crypto::{KmsClient, LocalDevKms};
 use hera_reporter::ReportStorage;
 use tracing::info;
-
-use crate::{config::Config, router::build_router, state::AppState};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -41,6 +33,7 @@ async fn main() -> anyhow::Result<()> {
         crypto,
         report_storage,
         kms_key_ref: config.kms_key_ref.clone(),
+        scan_queue_name: config.scan_queue_name.clone(),
     };
     let router = build_router(state);
     let addr: SocketAddr = config.bind_addr.parse()?;
@@ -59,7 +52,7 @@ async fn build_s3_client(config: &Config) -> aws_sdk_s3::Client {
 
     let mut builder = aws_sdk_s3::config::Builder::from(&shared_config);
     if let Some(endpoint_url) = &config.aws_endpoint_url {
-        builder = builder.endpoint_url(endpoint_url);
+        builder = builder.endpoint_url(endpoint_url).force_path_style(true);
     }
 
     aws_sdk_s3::Client::from_conf(builder.build())

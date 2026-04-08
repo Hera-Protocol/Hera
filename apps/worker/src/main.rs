@@ -144,7 +144,7 @@ async fn build_s3_client(config: &Config) -> aws_sdk_s3::Client {
 
     let mut builder = aws_sdk_s3::config::Builder::from(&shared_config);
     if let Some(endpoint_url) = &config.aws_endpoint_url {
-        builder = builder.endpoint_url(endpoint_url);
+        builder = builder.endpoint_url(endpoint_url).force_path_style(true);
     }
 
     aws_sdk_s3::Client::from_conf(builder.build())
