@@ -5,6 +5,7 @@ pub mod repos;
 
 use hera_types::{
     ChainId, Counterparty, CounterpartyVisibility, EventMemo, EventProvenance, EventType, Network,
+    ScanJobStatus,
 };
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
@@ -65,6 +66,19 @@ pub(crate) fn counterparty_visibility_to_db(visibility: &CounterpartyVisibility)
     }
 }
 
+pub(crate) fn scan_job_status_to_db(status: &ScanJobStatus) -> (&'static str, Option<&str>) {
+    match status {
+        ScanJobStatus::Created => ("CREATED", None),
+        ScanJobStatus::KeyValidated => ("KEY_VALIDATED", None),
+        ScanJobStatus::ChainSyncing => ("CHAIN_SYNCING", None),
+        ScanJobStatus::DetectingNotes => ("DETECTING_NOTES", None),
+        ScanJobStatus::ClassifyingFlows => ("CLASSIFYING_FLOWS", None),
+        ScanJobStatus::BuildingReport => ("BUILDING_REPORT", None),
+        ScanJobStatus::Signed => ("SIGNED", None),
+        ScanJobStatus::Failed(reason) => ("FAILED", Some(reason.as_str())),
+    }
+}
+
 pub(crate) fn parse_chain(value: &str) -> Result<ChainId, DbError> {
     match value {
         "ZCASH" => Ok(ChainId::Zcash),
@@ -95,6 +109,27 @@ pub(crate) fn parse_event_type(value: &str) -> Result<EventType, DbError> {
         "FEE" => Ok(EventType::Fee),
         other => Err(DbError::InvalidData(format!(
             "unsupported event type: {other}"
+        ))),
+    }
+}
+
+pub(crate) fn parse_scan_job_status(
+    value: &str,
+    failure_reason: Option<String>,
+) -> Result<ScanJobStatus, DbError> {
+    match value {
+        "CREATED" => Ok(ScanJobStatus::Created),
+        "KEY_VALIDATED" => Ok(ScanJobStatus::KeyValidated),
+        "CHAIN_SYNCING" => Ok(ScanJobStatus::ChainSyncing),
+        "DETECTING_NOTES" => Ok(ScanJobStatus::DetectingNotes),
+        "CLASSIFYING_FLOWS" => Ok(ScanJobStatus::ClassifyingFlows),
+        "BUILDING_REPORT" => Ok(ScanJobStatus::BuildingReport),
+        "SIGNED" => Ok(ScanJobStatus::Signed),
+        "FAILED" => Ok(ScanJobStatus::Failed(
+            failure_reason.unwrap_or_else(|| "scan job failed".to_string()),
+        )),
+        other => Err(DbError::InvalidData(format!(
+            "unsupported scan job status value: {other}"
         ))),
     }
 }
