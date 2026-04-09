@@ -9,8 +9,13 @@ Why it exists:
 
 Current state:
 - This binary implements the decoder JSON contract.
-- By default it fails loudly on non-empty public MASP input.
-- If `HERA_NAMADA_DECODER_ALLOW_STUB=1` is set, it emits deterministic stub notes for local plumbing tests only.
+- It now parses public MASP transaction batches with the official Namada MASP
+  primitives and trial-decrypts owned notes with the provided viewing key.
+- It fetches block timestamps from `NAMADA_RPC_URL` so emitted notes carry real
+  chain time instead of fabricated local timestamps.
+- Asset metadata is preserved as canonical MASP asset-type identifiers inside
+  this isolated tool. Hera can enrich those identifiers later through its
+  separate asset-resolution layer.
 
 Contract:
 - Input: `hera_namada_adapter::ExternalDecodeRequest`
@@ -21,9 +26,5 @@ Worker configuration example:
 ```env
 NAMADA_DECODER_COMMAND=cargo
 NAMADA_DECODER_ARGS=run --manifest-path tools/namada-masp-decoder/Cargo.toml --quiet --
+NAMADA_RPC_URL=https://rpc.namada.net
 ```
-
-Production expectation:
-- Replace `decode_request` in `src/main.rs` with an implementation backed by the official Namada SDK / MASP stack.
-- Keep the binary outside the core workspace so the dependency and licensing boundary remains explicit.
-
