@@ -26,9 +26,9 @@ pub struct ExternalMaspDecoder {
 /// leak viewing keys via command-line arguments or process listings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-struct DecodeRequest {
-    key: ValidatedNamadaKey,
-    public_state: PublicIndexerState,
+pub struct ExternalDecodeRequest {
+    pub key: ValidatedNamadaKey,
+    pub public_state: PublicIndexerState,
 }
 
 /// Defines the response contract from an external MASP decoder. The decoder is
@@ -36,8 +36,8 @@ struct DecodeRequest {
 /// persistence in-process.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-struct DecodeResponse {
-    notes: Vec<MaspNote>,
+pub struct ExternalDecodeResponse {
+    pub notes: Vec<MaspNote>,
 }
 
 /// Uses the configured external decoder when public MASP state is present and
@@ -55,7 +55,7 @@ pub async fn decode_owned_notes_with_external(
         return Ok(Vec::new());
     }
 
-    let request = DecodeRequest {
+    let request = ExternalDecodeRequest {
         key: key.clone(),
         public_state: public_state.clone(),
     };
@@ -92,7 +92,7 @@ pub async fn decode_owned_notes_with_external(
         )));
     }
 
-    let response = serde_json::from_slice::<DecodeResponse>(&output.stdout)
+    let response = serde_json::from_slice::<ExternalDecodeResponse>(&output.stdout)
         .map_err(|err| NamadaAdapterError::ExternalDecoderProtocol(err.to_string()))?;
     Ok(response.notes)
 }

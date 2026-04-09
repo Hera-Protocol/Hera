@@ -1,4 +1,4 @@
-.PHONY: dev migrate test test-integration lint clean
+.PHONY: dev migrate test test-integration test-decoder lint clean
 
 dev:
 	# Start the local infrastructure stack, then compile the full workspace against it.
@@ -16,6 +16,10 @@ test:
 test-integration:
 	# Run ignored integration tests that depend on Docker-backed services and therefore are slower and more environment-sensitive.
 	cargo test --workspace -- --ignored
+
+test-decoder:
+	# Validate the standalone Namada decoder package offline and with a writable temp dir, matching the restricted local environment used for Stage 1 development.
+	TMPDIR=/tmp cargo test --offline --manifest-path tools/namada-masp-decoder/Cargo.toml
 
 lint:
 	# Enforce the repo's formatting and warning-free lint baseline before commit or CI.
