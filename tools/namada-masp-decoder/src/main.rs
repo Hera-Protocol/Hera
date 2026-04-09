@@ -7,20 +7,26 @@ use borsh::BorshDeserialize;
 use chrono::{DateTime, Utc};
 use hera_namada_adapter::{ExternalDecodeRequest, ExternalDecodeResponse, MaspNote};
 use hera_types::Asset;
+use masp_primitives::asset_type::AssetType;
 use masp_primitives::ff::PrimeField;
 use masp_primitives::sapling::note_encryption::{
     try_sapling_note_decryption, PreparedIncomingViewingKey,
 };
 use masp_primitives::transaction::components::OutputDescription;
 use masp_primitives::transaction::{Authorization, Authorized};
+use namada_core::address::{Address, InternalAddress};
 use namada_core::chain::BlockHeight;
 use namada_core::masp::{ExtendedViewingKey, MaspTransaction};
 use namada_core::storage::TxIndex;
 use namada_sdk::masp::utils::{MaspIndexedTx, MaspTxKind};
-use namada_sdk::masp::{NotePosition, NETWORK};
+use namada_sdk::masp::{NotePosition, ShieldedContext as NamadaShieldedContext, NETWORK};
+use namada_sdk::token::masp::fs::FsShieldedUtils;
+use namada_sdk::token::masp::shielded_wallet::ShieldedApi;
+use namada_sdk::{rpc, ShieldedWallet};
 use namada_tx::IndexedTx;
 use serde::Deserialize;
 use serde_json::Value;
+use tendermint_rpc::HttpClient;
 
 type SaplingProof = OutputDescription<
     <
@@ -57,19 +63,29 @@ async fn decode_request(request: ExternalDecodeRequest) -> anyhow::Result<Extern
         return Ok(ExternalDecodeResponse { notes: Vec::new() });
     }
 
+    let rpc_url =
+        std::env::var("NAMADA_RPC_URL").unwrap_or_else(|_| "https://rpc.namada.net".to_string());
     let viewing_key = parse_viewing_key(&request.key.raw_key)?;
     let snapshot = Snapshot::from_public_state(&request.public_state)?;
     let note_index = parse_note_index(&snapshot.note_index)?;
     let transactions = parse_transactions(snapshot.txs, request.key.birthday_height)?;
-    let timestamp_cache = fetch_block_timestamps(unique_block_heights(&transactions)).await?;
+    let timestamp_cache =
+        fetch_block_timestamps(&rpc_url, unique_block_heights(&transactions)).await?;
+    let mut asset_metadata = AssetMetadataResolver::new(&rpc_url);
+    let mut notes = Vec::new();
 
-    let mut notes = transactions
-        .into_iter()
-        .map(|tx| decode_notes_from_transaction(&tx, &viewing_key, &note_index, &timestamp_cache))
-        .collect::<anyhow::Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+    for tx in transactions {
+        notes.extend(
+            decode_notes_from_transaction(
+                &tx,
+                &viewing_key,
+                &note_index,
+                &timestamp_cache,
+                &mut asset_metadata,
+            )
+            .await?,
+        );
+    }
 
     notes.sort_by(|left, right| {
         left.block_height
@@ -169,13 +185,14 @@ fn unique_block_heights(transactions: &[DecodedTransaction]) -> Vec<u64> {
     heights
 }
 
-async fn fetch_block_timestamps(heights: Vec<u64>) -> anyhow::Result<HashMap<u64, DateTime<Utc>>> {
+async fn fetch_block_timestamps(
+    rpc_url: &str,
+    heights: Vec<u64>,
+) -> anyhow::Result<HashMap<u64, DateTime<Utc>>> {
     if heights.is_empty() {
         return Ok(HashMap::new());
     }
 
-    let rpc_url =
-        std::env::var("NAMADA_RPC_URL").unwrap_or_else(|_| "https://rpc.namada.net".to_string());
     let client = reqwest::Client::new();
     let mut timestamps = HashMap::new();
 
@@ -202,11 +219,12 @@ async fn fetch_block_timestamps(heights: Vec<u64>) -> anyhow::Result<HashMap<u64
     Ok(timestamps)
 }
 
-fn decode_notes_from_transaction(
+async fn decode_notes_from_transaction(
     tx: &DecodedTransaction,
     viewing_key: &masp_primitives::sapling::ViewingKey,
     note_index: &BTreeMap<MaspIndexedTx, NotePosition>,
     timestamps: &HashMap<u64, DateTime<Utc>>,
+    asset_metadata: &mut AssetMetadataResolver,
 ) -> anyhow::Result<Vec<MaspNote>> {
     let Some(_first_note_position) = note_index.get(&tx.indexed).copied() else {
         bail!(
@@ -240,25 +258,87 @@ fn decode_notes_from_transaction(
         };
 
         let note_commitment = hex::encode(note.cmu().to_repr());
-        let asset_id = note.asset_type.to_string();
+        let asset = asset_metadata.resolve(note.asset_type).await;
         notes.push(MaspNote {
             txid: tx.transaction.txid().to_string(),
             block_height: tx.indexed.indexed_tx.block_height.0,
             timestamp,
-            asset: Asset {
-                // The decoder can always preserve the canonical asset identity
-                // from the MASP asset type even when a richer chain lookup is
-                // not available in this isolated process.
-                symbol: asset_id.clone(),
-                asset_id,
-                decimals: 0,
-            },
+            asset,
             amount_raw: u128::from(note.value),
             note_commitment,
         });
     }
 
     Ok(notes)
+}
+
+/// Resolves human-readable MASP asset metadata using the official Namada
+/// shielded-wallet decoding path when possible. The canonical MASP asset type
+/// remains the stable `asset_id`; symbol/decimals are best-effort enrichments
+/// for report readability.
+struct AssetMetadataResolver {
+    rpc_client: Option<HttpClient>,
+    native_token: Option<Address>,
+    wallet: NamadaShieldedContext<FsShieldedUtils>,
+    cache: HashMap<String, Asset>,
+}
+
+impl AssetMetadataResolver {
+    fn new(rpc_url: &str) -> Self {
+        Self {
+            rpc_client: HttpClient::new(rpc_url).ok(),
+            native_token: None,
+            wallet: NamadaShieldedContext::new(ShieldedWallet::<FsShieldedUtils>::default()),
+            cache: HashMap::new(),
+        }
+    }
+
+    async fn resolve(&mut self, asset_type: AssetType) -> Asset {
+        let asset_id = asset_type.to_string();
+        if let Some(asset) = self.cache.get(&asset_id) {
+            return asset.clone();
+        }
+
+        let fallback = Asset {
+            symbol: asset_id.clone(),
+            asset_id: asset_id.clone(),
+            decimals: 0,
+        };
+
+        let Some(client) = self.rpc_client.as_ref() else {
+            self.cache.insert(asset_id, fallback.clone());
+            return fallback;
+        };
+
+        if self.native_token.is_none() {
+            self.native_token = rpc::query_native_token(client).await.ok();
+        }
+
+        let asset = match self.wallet.decode_asset_type(client, asset_type).await {
+            Some(decoded) => Asset {
+                symbol: symbol_for_token(&decoded.token, self.native_token.as_ref()),
+                asset_id: asset_id.clone(),
+                decimals: u8::from(decoded.denom),
+            },
+            None => fallback,
+        };
+
+        self.cache.insert(asset_id, asset.clone());
+        asset
+    }
+}
+
+fn symbol_for_token(token: &Address, native_token: Option<&Address>) -> String {
+    if native_token == Some(token) {
+        return "NAM".to_string();
+    }
+
+    match token {
+        Address::Internal(InternalAddress::IbcToken(_)) => "IBC".to_string(),
+        Address::Internal(InternalAddress::Erc20(_)) => "ERC20".to_string(),
+        Address::Internal(kind) => kind.to_string(),
+        _ => token.to_string(),
+    }
 }
 
 #[derive(Debug, Deserialize)]

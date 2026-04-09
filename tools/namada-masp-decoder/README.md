@@ -13,9 +13,11 @@ Current state:
   primitives and trial-decrypts owned notes with the provided viewing key.
 - It fetches block timestamps from `NAMADA_RPC_URL` so emitted notes carry real
   chain time instead of fabricated local timestamps.
-- Asset metadata is preserved as canonical MASP asset-type identifiers inside
-  this isolated tool. Hera can enrich those identifiers later through its
-  separate asset-resolution layer.
+- It preserves the canonical MASP asset type as `asset_id`, and now enriches
+  emitted notes with chain-decoded asset precision plus a friendly symbol when
+  that symbol can be determined reliably. Native NAM resolves to `NAM`; other
+  assets fall back to stable token identity strings when richer metadata is not
+  available from the official RPC path.
 
 Contract:
 - Input: `hera_namada_adapter::ExternalDecodeRequest`
