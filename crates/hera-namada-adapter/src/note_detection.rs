@@ -12,35 +12,29 @@ pub fn detect_owned_notes(
     context: &ShieldedContext,
     _key: &ValidatedNamadaKey,
 ) -> Result<Vec<MaspNote>, NamadaAdapterError> {
-    if !context.txs().is_empty() {
-        let tx_count = context.txs().len();
-        let block_heights = context
-            .txs()
-            .iter()
-            .map(|tx| tx.block_height)
-            .collect::<Vec<_>>();
-        let block_index_sum = context
-            .txs()
-            .iter()
-            .map(|tx| usize::try_from(tx.block_index).unwrap_or(0usize))
-            .sum::<usize>();
-        let batch_count = context.txs().iter().map(|tx| tx.batch.len()).sum::<usize>();
-        let fee_batch_count = context
-            .txs()
-            .iter()
-            .flat_map(|tx| tx.batch.iter())
-            .filter(|batch| batch.is_masp_fee_payment)
-            .count();
-        let total_byte_len = context
-            .txs()
-            .iter()
-            .flat_map(|tx| tx.batch.iter())
-            .map(|batch| usize::try_from(batch.masp_tx_index).unwrap_or(0usize) + batch.bytes.len())
-            .sum::<usize>();
-        return Err(NamadaAdapterError::MaspSyncFailed(
+    if let Some(public_state) = context.public_state() {
+        if public_state.tx_count() == 0 {
+            return Ok(Vec::new());
+        }
+
+        let block_heights = public_state
+            .block_heights();
+
+        if !public_state.has_auxiliary_state() {
+            return Err(NamadaAdapterError::PublicMaspDecodingUnavailable(
+                format!(
+                    "public indexer payload is missing auxiliary MASP state; fetched transactions across heights {:?} with {}",
+                    block_heights,
+                    public_state.summary(),
+                ),
+            ));
+        }
+
+        return Err(NamadaAdapterError::PublicMaspDecodingUnavailable(
             format!(
-                "public MASP transaction decoding is not implemented yet; fetched {tx_count} indexed transactions across heights {:?}, block-index sum {block_index_sum}, {batch_count} MASP batches, {fee_batch_count} fee batches, and {total_byte_len} raw bytes from the public indexer",
-                block_heights
+                "public MASP transaction decoding requires the official Namada MASP decoder; fetched transactions across heights {:?} with {}",
+                block_heights,
+                public_state.summary(),
             ),
         ));
     }
@@ -77,10 +71,11 @@ pub fn detect_owned_notes(
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
+    use serde_json::json;
 
     use crate::{
         detect_owned_notes,
-        masp_sync::{ShieldedContext, ShieldedEntry},
+        masp_sync::{PublicIndexerState, ShieldedContext, ShieldedEntry},
         viewing_key::ValidatedNamadaKey,
     };
 
@@ -129,15 +124,20 @@ mod tests {
     #[test]
     fn rejects_public_indexer_batches_until_raw_tx_decoding_lands() {
         let context = ShieldedContext::new_public(
-            vec![crate::masp_sync::IndexedMaspTx {
-                block_height: 7,
-                block_index: 0,
-                batch: vec![crate::masp_sync::IndexedMaspBatchItem {
-                    masp_tx_index: 0,
-                    is_masp_fee_payment: false,
-                    bytes: vec![1, 2, 3],
+            PublicIndexerState::new(
+                vec![crate::masp_sync::IndexedMaspTx {
+                    block_height: 7,
+                    block_index: 0,
+                    batch: vec![crate::masp_sync::IndexedMaspBatchItem {
+                        masp_tx_index: 0,
+                        is_masp_fee_payment: false,
+                        bytes: vec![1, 2, 3],
+                    }],
                 }],
-            }],
+                json!([{ "note_pos": 1 }]),
+                json!({ "path": ["a"] }),
+                json!([{ "root": "b" }]),
+            ),
             7,
             7,
         );
@@ -151,7 +151,26 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.err().expect("expected detection error");
-        assert!(err.to_string().contains("public MASP transaction decoding"));
+        assert!(err.to_string().contains("official Namada MASP decoder"));
+    }
+
+    #[test]
+    fn returns_empty_when_public_window_has_no_transactions() {
+        let context = ShieldedContext::new_public(
+            PublicIndexerState::new(Vec::new(), json!([]), json!({}), json!([])),
+            9,
+            9,
+        );
+        let key = ValidatedNamadaKey {
+            raw_key: "zvknam1exampleexample".into(),
+            chain_id: "namada".into(),
+            birthday_height: Some(1),
+        };
+
+        let result = detect_owned_notes(&context, &key);
+
+        assert!(result.is_ok());
+        assert!(result.unwrap_or_default().is_empty());
     }
 
     #[test]

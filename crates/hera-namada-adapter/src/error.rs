@@ -8,6 +8,8 @@ pub enum NamadaAdapterError {
     InvalidViewingKey,
     #[error("masp sync failed: {0}")]
     MaspSyncFailed(String),
+    #[error("public masp decoding unavailable: {0}")]
+    PublicMaspDecodingUnavailable(String),
     #[error("asset resolution failed: {0}")]
     AssetResolutionFailed(String),
     #[error("indexer unavailable: {0}")]
