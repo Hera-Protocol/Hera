@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
 use futures_util::StreamExt;
@@ -33,26 +33,42 @@ use crate::{
 /// Holds the minimum connection state needed to scan compact Zcash blocks from
 /// a lightwalletd-compatible server.
 pub struct ZcashScanner {
-    pub lightwalletd_url: String,
+    pub lightwalletd_urls: Vec<String>,
     pub network: Network,
+}
+
+/// Captures the specific lightwalletd endpoint selected for a scan so the
+/// worker can bind both tip selection and block streaming to one server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedLightwalletd {
+    pub url: String,
+    pub chain_name: String,
+    pub tip_height: u32,
 }
 
 impl ZcashScanner {
     /// Queries the remote tip height before a scan so the orchestrator can bind
     /// a scan window to a concrete chain state instead of guessing an end block.
     pub async fn latest_block_height(&self) -> Result<u32, ZcashAdapterError> {
-        let mut client = CompactTxStreamerClient::connect(self.lightwalletd_url.clone())
-            .await
-            .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?;
+        Ok(self.resolve_endpoint().await?.tip_height)
+    }
 
-        let block = client
-            .get_latest_block(ChainSpec {})
-            .await
-            .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?
-            .into_inner();
+    /// Resolves one healthy lightwalletd endpoint before a scan starts. This
+    /// keeps tip discovery and the subsequent block stream on the same backend
+    /// so a failover list does not create inconsistent scan windows.
+    pub async fn resolve_endpoint(&self) -> Result<ResolvedLightwalletd, ZcashAdapterError> {
+        let mut failures = Vec::new();
+        for url in self.candidate_endpoints() {
+            match self.inspect_endpoint(&url).await {
+                Ok(endpoint) => return Ok(endpoint),
+                Err(err) => failures.push(format!("{url}: {err}")),
+            }
+        }
 
-        u32::try_from(block.height)
-            .map_err(|_| ZcashAdapterError::ScanFailed("tip height overflow".into()))
+        Err(ZcashAdapterError::IndexerUnavailable(format!(
+            "no healthy lightwalletd endpoint found; attempts: {}",
+            failures.join(" | ")
+        )))
     }
 
     /// Streams compact blocks from lightwalletd and scans them with the official
@@ -73,26 +89,40 @@ impl ZcashScanner {
     where
         F: Fn(ZcashScanCheckpoint),
     {
+        let endpoint = self.resolve_endpoint().await?;
+        self.scan_with_endpoint(key, from_height, to_height, checkpoint_cb, &endpoint)
+            .await
+    }
+
+    /// Scans against a previously resolved endpoint so the caller can pin a
+    /// job to one backend across tip discovery and block streaming.
+    pub async fn scan_with_endpoint<F>(
+        &self,
+        key: &ValidatedZcashKey,
+        from_height: u32,
+        to_height: u32,
+        checkpoint_cb: F,
+        endpoint: &ResolvedLightwalletd,
+    ) -> Result<Vec<ZcashNote>, ZcashAdapterError>
+    where
+        F: Fn(ZcashScanCheckpoint),
+    {
         if from_height > to_height {
             return Err(ZcashAdapterError::ScanFailed(
                 "from_height must be less than or equal to to_height".into(),
             ));
         }
 
-        let mut client = CompactTxStreamerClient::connect(self.lightwalletd_url.clone())
+        if to_height > endpoint.tip_height {
+            return Err(ZcashAdapterError::ScanFailed(format!(
+                "requested end height {to_height} is ahead of endpoint tip {} on {}",
+                endpoint.tip_height, endpoint.url
+            )));
+        }
+
+        let mut client = CompactTxStreamerClient::connect(endpoint.url.clone())
             .await
             .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?;
-
-        // We call `GetLightdInfo` first because it tells us which chain the server
-        // thinks it serves. That prevents a valid key from being scanned against
-        // the wrong network endpoint.
-        let lightd_info = client
-            .get_lightd_info(Empty {})
-            .await
-            .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?
-            .into_inner();
-
-        self.validate_chain_name(&lightd_info.chain_name)?;
 
         // We call `GetBlockRange` because lightwalletd is designed to stream
         // compact blocks efficiently; downloading full blocks would waste bandwidth
@@ -151,6 +181,55 @@ impl ZcashScanner {
         }
 
         Ok(notes)
+    }
+
+    async fn inspect_endpoint(&self, url: &str) -> Result<ResolvedLightwalletd, ZcashAdapterError> {
+        let mut client = CompactTxStreamerClient::connect(url.to_string())
+            .await
+            .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?;
+
+        // We call `GetLightdInfo` first because it tells us which chain the server
+        // thinks it serves. That prevents a valid key from being scanned against
+        // the wrong network endpoint.
+        let lightd_info = client
+            .get_lightd_info(Empty {})
+            .await
+            .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?
+            .into_inner();
+        self.validate_chain_name(&lightd_info.chain_name)?;
+
+        // We fetch the latest block from the same endpoint immediately after the
+        // chain-name probe so the selected server is also the one that defines
+        // the scan window for this job.
+        let block = client
+            .get_latest_block(ChainSpec {})
+            .await
+            .map_err(|err| ZcashAdapterError::IndexerUnavailable(err.to_string()))?
+            .into_inner();
+
+        let tip_height = u32::try_from(block.height)
+            .map_err(|_| ZcashAdapterError::ScanFailed("tip height overflow".into()))?;
+
+        Ok(ResolvedLightwalletd {
+            url: url.to_string(),
+            chain_name: lightd_info.chain_name,
+            tip_height,
+        })
+    }
+
+    fn candidate_endpoints(&self) -> Vec<String> {
+        let mut seen = HashSet::new();
+        self.lightwalletd_urls
+            .iter()
+            .filter_map(|value| {
+                let trimmed = value.trim();
+                if trimmed.is_empty() || !seen.insert(trimmed.to_string()) {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            })
+            .collect()
     }
 
     fn scan_compact_block(
@@ -332,6 +411,34 @@ impl ZcashScanner {
                 chain_name
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hera_types::Network;
+
+    use super::ZcashScanner;
+
+    #[test]
+    fn candidate_endpoints_trim_and_dedupe() {
+        let scanner = ZcashScanner {
+            lightwalletd_urls: vec![
+                " https://mainnet.lightwalletd.com:9067 ".to_string(),
+                String::new(),
+                "https://mainnet.lightwalletd.com:9067".to_string(),
+                "https://backup.example:9067".to_string(),
+            ],
+            network: Network::Mainnet,
+        };
+
+        assert_eq!(
+            scanner.candidate_endpoints(),
+            vec![
+                "https://mainnet.lightwalletd.com:9067".to_string(),
+                "https://backup.example:9067".to_string(),
+            ]
+        );
     }
 }
 

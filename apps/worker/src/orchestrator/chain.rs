@@ -58,42 +58,52 @@ impl ScanOrchestrator {
         let from_height = u32::try_from(from_height)
             .map_err(|_| OrchestratorError::Queue("zcash checkpoint overflow".into()))?;
         let scanner = ZcashScanner {
-            lightwalletd_url: self.config.lightwalletd_url.clone(),
+            lightwalletd_urls: std::iter::once(self.config.lightwalletd_url.clone())
+                .chain(self.config.lightwalletd_fallback_urls.iter().cloned())
+                .collect(),
             network: loaded.job.network.clone(),
         };
-        let to_height = self
+        let endpoint = self
             .with_retry("zcash chain tip", || {
                 let scanner = &scanner;
                 async move {
                     scanner
-                        .latest_block_height()
+                        .resolve_endpoint()
                         .await
                         .map_err(OrchestratorError::from)
                 }
             })
             .await?;
+        let to_height = endpoint.tip_height;
         let notes = self
             .with_retry("zcash scan", || {
                 let scanner = &scanner;
                 let validated_key = validated_key.clone();
+                let endpoint = endpoint.clone();
                 let db = self.db.clone();
                 let case_id = loaded.case.id;
                 let chain = loaded.job.chain.clone();
                 async move {
                     scanner
-                        .scan(&validated_key, from_height, to_height, move |checkpoint| {
-                            let db = db.clone();
-                            let chain = chain.clone();
-                            tokio::spawn(async move {
-                                let _ = save_checkpoint(
-                                    &db,
-                                    case_id,
-                                    chain,
-                                    u64::from(checkpoint.last_scanned_height),
-                                )
-                                .await;
-                            });
-                        })
+                        .scan_with_endpoint(
+                            &validated_key,
+                            from_height,
+                            to_height,
+                            move |checkpoint| {
+                                let db = db.clone();
+                                let chain = chain.clone();
+                                tokio::spawn(async move {
+                                    let _ = save_checkpoint(
+                                        &db,
+                                        case_id,
+                                        chain,
+                                        u64::from(checkpoint.last_scanned_height),
+                                    )
+                                    .await;
+                                });
+                            },
+                            &endpoint,
+                        )
                         .await
                         .map_err(OrchestratorError::from)
                 }

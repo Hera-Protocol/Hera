@@ -12,6 +12,7 @@ pub struct Config {
     pub queue_name: String,
     pub processing_queue_name: String,
     pub lightwalletd_url: String,
+    pub lightwalletd_fallback_urls: Vec<String>,
     pub namada_indexer_url: String,
     pub namada_chain_id: String,
     pub namada_decoder_command: Option<String>,
@@ -36,6 +37,16 @@ impl Config {
             processing_queue_name: optional("SCAN_PROCESSING_QUEUE_NAME")
                 .unwrap_or_else(|| "hera:scan:processing".to_string()),
             lightwalletd_url: required("LIGHTWALLETD_URL")?,
+            lightwalletd_fallback_urls: optional("LIGHTWALLETD_FALLBACK_URLS")
+                .map(|value| {
+                    value
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
             namada_indexer_url: required("NAMADA_INDEXER_URL")?,
             namada_chain_id: required("NAMADA_CHAIN_ID")?,
             namada_decoder_command: optional("NAMADA_DECODER_COMMAND"),
