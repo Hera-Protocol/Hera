@@ -17,8 +17,7 @@ pub fn detect_owned_notes(
             return Ok(Vec::new());
         }
 
-        let block_heights = public_state
-            .block_heights();
+        let block_heights = public_state.block_heights();
 
         if !public_state.has_auxiliary_state() {
             return Err(NamadaAdapterError::PublicMaspDecodingUnavailable(

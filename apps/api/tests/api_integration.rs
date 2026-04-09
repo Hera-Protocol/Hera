@@ -70,6 +70,7 @@ async fn setup_app(queue_name: &str) -> (axum::Router, DbPool) {
         report_storage,
         kms_key_ref: "alias/hera-dev".into(),
         scan_queue_name: queue_name.to_string(),
+        namada_chain_id: "namada.5f5de2dd1b88cba30586420".into(),
     };
 
     (build_router(state), db)

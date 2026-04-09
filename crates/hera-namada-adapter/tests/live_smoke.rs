@@ -11,11 +11,21 @@ fn namada_indexer_url() -> (String, bool) {
     }
 }
 
+fn namada_chain_id() -> String {
+    std::env::var("NAMADA_CHAIN_ID")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "namada.5f5de2dd1b88cba30586420".to_string())
+}
+
 #[tokio::test]
 #[ignore]
 async fn indexer_reports_latest_block_cursor() {
     let (indexer_url, explicit_endpoint) = namada_indexer_url();
-    let cursor = match (MaspIndexerClient { indexer_url }).latest_indexed_block().await {
+    let cursor = match (MaspIndexerClient { indexer_url })
+        .latest_indexed_block()
+        .await
+    {
         Ok(value) => value,
         Err(err) if !explicit_endpoint => {
             eprintln!(
@@ -33,9 +43,7 @@ async fn indexer_reports_latest_block_cursor() {
 #[ignore]
 async fn indexer_serves_recent_masp_tx_window() {
     let (indexer_url, explicit_endpoint) = namada_indexer_url();
-    let client = MaspIndexerClient {
-        indexer_url,
-    };
+    let client = MaspIndexerClient { indexer_url };
     let latest = match client.latest_indexed_block().await {
         Ok(value) => value,
         Err(err) if !explicit_endpoint => {
@@ -52,7 +60,7 @@ async fn indexer_serves_recent_masp_tx_window() {
         .fetch_shielded_context(
             &hera_namada_adapter::ValidatedNamadaKey {
                 raw_key: "zvknam1smoketest".into(),
-                chain_id: "namada.5f5de2dd1b88cba30586420".into(),
+                chain_id: namada_chain_id(),
                 birthday_height: Some(from_block),
             },
             from_block,

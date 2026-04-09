@@ -10,6 +10,7 @@ use zeroize::Zeroizing;
 
 use hera_crypto::encrypt_viewing_key;
 use hera_db::repos::keys::{EncryptedViewKeyRecord, ViewKeyRepo};
+use hera_namada_adapter::parse_and_validate as parse_namada_view_key;
 use hera_types::ChainId;
 
 use crate::{error::ApiError, state::AppState};
@@ -48,8 +49,28 @@ async fn import_view_key(
         return Err(ApiError::BadRequest("raw_key is required".into()));
     }
 
+    let mut birthday_height = payload.birthday_height;
+    let canonical_raw_key = match chain {
+        ChainId::Namada => {
+            let validated = parse_namada_view_key(&payload.raw_key, &state.namada_chain_id)
+                .map_err(|_| ApiError::BadRequest("invalid Namada viewing key".into()))?;
+            if let (Some(request_birthday), Some(key_birthday)) =
+                (birthday_height, validated.birthday_height)
+            {
+                if request_birthday != key_birthday {
+                    return Err(ApiError::BadRequest(
+                        "birthday_height conflicts with the viewing key suffix".into(),
+                    ));
+                }
+            }
+            birthday_height = birthday_height.or(validated.birthday_height);
+            validated.raw_key
+        }
+        ChainId::Zcash => payload.raw_key,
+    };
+
     let logical_key_ref = Uuid::new_v4();
-    let raw_key = Zeroizing::new(payload.raw_key);
+    let raw_key = Zeroizing::new(canonical_raw_key);
     let encrypted = encrypt_viewing_key(
         Arc::as_ref(&state.crypto),
         format!("{}:{logical_key_ref}", state.kms_key_ref),
@@ -66,7 +87,7 @@ async fn import_view_key(
             ciphertext: &encrypted.ciphertext,
             nonce: &encrypted.nonce,
             encrypted_data_key: &encrypted.encrypted_data_key,
-            birthday_height: payload.birthday_height,
+            birthday_height,
         })
         .await
         .map_err(ApiError::internal)?;

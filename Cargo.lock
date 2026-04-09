@@ -1870,6 +1870,7 @@ dependencies = [
  "deadpool-redis",
  "hera-crypto",
  "hera-db",
+ "hera-namada-adapter",
  "hera-reporter",
  "hera-types",
  "hera-worker",
@@ -1935,6 +1936,7 @@ dependencies = [
 name = "hera-namada-adapter"
 version = "0.1.0"
 dependencies = [
+ "bech32",
  "chrono",
  "hera-types",
  "reqwest",

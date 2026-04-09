@@ -18,6 +18,7 @@ aws-sdk-s3 = "1"
 deadpool-redis = "0.18"
 hera-crypto = { path = "../../crates/hera-crypto" }
 hera-db = { path = "../../crates/hera-db" }
+hera-namada-adapter = { path = "../../crates/hera-namada-adapter" }
 hera-reporter = { path = "../reporter" }
 hera-types = { path = "../../crates/hera-types" }
 hera-worker = { path = "../worker" }

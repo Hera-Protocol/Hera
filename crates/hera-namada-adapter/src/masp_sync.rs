@@ -131,7 +131,10 @@ impl PublicIndexerState {
     }
 
     pub fn block_heights(&self) -> Vec<u64> {
-        self.txs.iter().map(|tx| tx.block_height).collect::<Vec<_>>()
+        self.txs
+            .iter()
+            .map(|tx| tx.block_height)
+            .collect::<Vec<_>>()
     }
 
     pub fn note_index_entries(&self) -> usize {
@@ -244,10 +247,18 @@ impl MaspIndexerClient {
             .map_err(|err| NamadaAdapterError::MaspSyncFailed(err.to_string()))?;
 
         let note_index = self
-            .fetch_json_value(&client, "notes-index", vec![("height", latest.height.to_string())])
+            .fetch_json_value(
+                &client,
+                "notes-index",
+                vec![("height", latest.height.to_string())],
+            )
             .await?;
         let witness_map = self
-            .fetch_json_value(&client, "witness-map", vec![("height", latest.height.to_string())])
+            .fetch_json_value(
+                &client,
+                "witness-map",
+                vec![("height", latest.height.to_string())],
+            )
             .await?;
         let commitment_tree = self
             .fetch_json_value(
@@ -264,12 +275,7 @@ impl MaspIndexerClient {
         checkpoint_cb(checkpoint.clone());
 
         Ok(ShieldedContext::new_public(
-            PublicIndexerState::new(
-                response.txs,
-                note_index,
-                witness_map,
-                commitment_tree,
-            ),
+            PublicIndexerState::new(response.txs, note_index, witness_map, commitment_tree),
             checkpoint.last_synced_epoch,
             checkpoint.last_synced_block,
         ))

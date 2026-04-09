@@ -68,7 +68,8 @@ impl ScanOrchestrator {
                 loaded.job.network.clone(),
             )?)),
             ChainId::Namada => Ok(ValidatedChainKey::Namada(parse_namada_view_key(
-                raw_key, "namada",
+                raw_key,
+                &self.config.namada_chain_id,
             )?)),
         }
     }

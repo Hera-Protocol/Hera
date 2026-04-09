@@ -13,6 +13,7 @@ pub struct Config {
     pub processing_queue_name: String,
     pub lightwalletd_url: String,
     pub namada_indexer_url: String,
+    pub namada_chain_id: String,
     pub scan_engine_version: String,
     pub aws_region: String,
     pub aws_endpoint_url: Option<String>,
@@ -34,6 +35,7 @@ impl Config {
                 .unwrap_or_else(|| "hera:scan:processing".to_string()),
             lightwalletd_url: required("LIGHTWALLETD_URL")?,
             namada_indexer_url: required("NAMADA_INDEXER_URL")?,
+            namada_chain_id: required("NAMADA_CHAIN_ID")?,
             scan_engine_version: optional("SCAN_ENGINE_VERSION")
                 .unwrap_or_else(|| "stage1".to_string()),
             aws_region: required("AWS_REGION")?,

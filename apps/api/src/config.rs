@@ -11,6 +11,7 @@ pub struct Config {
     pub bind_addr: String,
     pub kms_key_ref: String,
     pub scan_queue_name: String,
+    pub namada_chain_id: String,
     pub aws_region: String,
     pub aws_endpoint_url: Option<String>,
     pub report_bucket: String,
@@ -25,6 +26,7 @@ impl Config {
             kms_key_ref: required("KMS_KEY_ID")?,
             scan_queue_name: optional("SCAN_QUEUE_NAME")
                 .unwrap_or_else(|| "hera:scan:pending".to_string()),
+            namada_chain_id: required("NAMADA_CHAIN_ID")?,
             aws_region: required("AWS_REGION")?,
             aws_endpoint_url: optional("AWS_ENDPOINT_URL"),
             report_bucket: required("S3_BUCKET")?,
