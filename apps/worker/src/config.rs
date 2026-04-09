@@ -14,6 +14,8 @@ pub struct Config {
     pub lightwalletd_url: String,
     pub namada_indexer_url: String,
     pub namada_chain_id: String,
+    pub namada_decoder_command: Option<String>,
+    pub namada_decoder_args: Vec<String>,
     pub scan_engine_version: String,
     pub aws_region: String,
     pub aws_endpoint_url: Option<String>,
@@ -36,6 +38,15 @@ impl Config {
             lightwalletd_url: required("LIGHTWALLETD_URL")?,
             namada_indexer_url: required("NAMADA_INDEXER_URL")?,
             namada_chain_id: required("NAMADA_CHAIN_ID")?,
+            namada_decoder_command: optional("NAMADA_DECODER_COMMAND"),
+            namada_decoder_args: optional("NAMADA_DECODER_ARGS")
+                .map(|value| {
+                    value
+                        .split_ascii_whitespace()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
             scan_engine_version: optional("SCAN_ENGINE_VERSION")
                 .unwrap_or_else(|| "stage1".to_string()),
             aws_region: required("AWS_REGION")?,

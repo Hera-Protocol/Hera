@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod asset_resolver;
+pub mod decoder;
 pub mod error;
 pub mod mapper;
 pub mod masp_sync;
@@ -9,6 +10,7 @@ pub mod types;
 pub mod viewing_key;
 
 pub use asset_resolver::AssetResolver;
+pub use decoder::{decode_owned_notes_with_external, ExternalMaspDecoder};
 pub use error::NamadaAdapterError;
 pub use mapper::map_note_to_canonical;
 pub use masp_sync::{IndexerCursor, MaspIndexerClient, PublicIndexerState, ShieldedContext};

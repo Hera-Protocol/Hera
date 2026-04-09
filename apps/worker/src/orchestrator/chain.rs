@@ -1,7 +1,8 @@
 use hera_core::{normalize_namada_note, normalize_zcash_note, NormalizationContext};
 use hera_db::repos::events::EventRepo;
 use hera_namada_adapter::{
-    detect_owned_notes, MaspIndexerClient, TransferDirection, ValidatedNamadaKey,
+    decode_owned_notes_with_external, detect_owned_notes, ExternalMaspDecoder, MaspIndexerClient,
+    TransferDirection, ValidatedNamadaKey,
 };
 use hera_types::{Case, ChainId};
 use hera_zcash_adapter::{TxMeta, ValidatedZcashKey, ZcashScanner};
@@ -173,7 +174,16 @@ impl ScanOrchestrator {
 
         self.transition(loaded.job.id, hera_types::ScanJobStatus::DetectingNotes)
             .await?;
-        let notes = detect_owned_notes(&context, &validated_key)?;
+        let notes = match &self.config.namada_decoder_command {
+            Some(command) => {
+                let decoder = ExternalMaspDecoder {
+                    command: command.clone(),
+                    args: self.config.namada_decoder_args.clone(),
+                };
+                decode_owned_notes_with_external(&context, &validated_key, &decoder).await?
+            }
+            None => detect_owned_notes(&context, &validated_key)?,
+        };
 
         self.transition(loaded.job.id, hera_types::ScanJobStatus::ClassifyingFlows)
             .await?;

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
@@ -12,7 +12,8 @@ use crate::{
 /// sync because full-node MASP scanning is expensive. The public indexer gives
 /// us raw MASP transaction batches, and private deployments may provide richer
 /// pre-decoded note entries.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ShieldedContext {
     entries: Vec<ShieldedEntry>,
     public_state: Option<PublicIndexerState>,
@@ -25,7 +26,8 @@ pub struct ShieldedContext {
 /// client consumes multiple endpoints together when reconstructing owned-note
 /// state; preserving them here avoids baking unstable wire details into the
 /// rest of Hera prematurely.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct PublicIndexerState {
     txs: Vec<IndexedMaspTx>,
     note_index: Value,
@@ -330,7 +332,7 @@ struct TxResponse {
     txs: Vec<IndexedMaspTx>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) struct IndexedMaspTx {
     pub block_height: u64,
@@ -338,7 +340,7 @@ pub(crate) struct IndexedMaspTx {
     pub batch: Vec<IndexedMaspBatchItem>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) struct IndexedMaspBatchItem {
     pub masp_tx_index: u64,
@@ -346,7 +348,7 @@ pub(crate) struct IndexedMaspBatchItem {
     pub bytes: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) struct ShieldedEntry {
     pub txid: String,

@@ -10,6 +10,10 @@ pub enum NamadaAdapterError {
     MaspSyncFailed(String),
     #[error("public masp decoding unavailable: {0}")]
     PublicMaspDecodingUnavailable(String),
+    #[error("external masp decoder failed: {0}")]
+    ExternalDecoderFailed(String),
+    #[error("external masp decoder returned invalid output: {0}")]
+    ExternalDecoderProtocol(String),
     #[error("asset resolution failed: {0}")]
     AssetResolutionFailed(String),
     #[error("indexer unavailable: {0}")]
