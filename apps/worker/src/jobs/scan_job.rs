@@ -62,17 +62,38 @@ mod tests {
     use super::{dequeue, enqueue, ScanJobMessage};
     use hera_types::ChainId;
 
-    fn redis_url() -> String {
-        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string())
+    fn redis_url() -> (String, bool) {
+        match std::env::var("REDIS_URL") {
+            Ok(value) if !value.trim().is_empty() => (value, true),
+            _ => ("redis://localhost:6379".to_string(), false),
+        }
     }
 
     #[tokio::test]
-    #[ignore]
     async fn enqueue_and_dequeue_round_trip_through_redis() {
-        let pool = match Config::from_url(redis_url()).create_pool(Some(Runtime::Tokio1)) {
+        let (redis_url, explicit_redis) = redis_url();
+        let pool = match Config::from_url(redis_url).create_pool(Some(Runtime::Tokio1)) {
             Ok(value) => value,
             Err(err) => panic!("failed to create redis pool: {err}"),
         };
+        let mut ping_conn = match pool.get().await {
+            Ok(value) => value,
+            Err(err) if !explicit_redis => {
+                eprintln!("skipping Redis integration test because Redis is unavailable: {err}");
+                return;
+            }
+            Err(err) => panic!("failed to connect to Redis: {err}"),
+        };
+        if let Err(err) = redis::cmd("PING")
+            .query_async::<String>(&mut ping_conn)
+            .await
+        {
+            if !explicit_redis {
+                eprintln!("skipping Redis integration test because Redis did not respond: {err}");
+                return;
+            }
+            panic!("failed to ping Redis: {err}");
+        }
         let queue_name = format!("hera:test:pending:{}", Uuid::new_v4());
         let processing_queue_name = format!("hera:test:processing:{}", Uuid::new_v4());
         let message = ScanJobMessage {

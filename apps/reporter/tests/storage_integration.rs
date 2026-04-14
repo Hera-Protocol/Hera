@@ -12,9 +12,21 @@ use hera_types::{
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
-fn database_url() -> String {
-    std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://hera:devpassword@localhost:5432/hera".to_string())
+fn database_url() -> (String, bool) {
+    match std::env::var("DATABASE_URL") {
+        Ok(value) if !value.trim().is_empty() => (value, true),
+        _ => (
+            "postgres://hera:devpassword@localhost:5432/hera".to_string(),
+            false,
+        ),
+    }
+}
+
+fn localstack_url() -> (String, bool) {
+    match std::env::var("AWS_ENDPOINT_URL") {
+        Ok(value) if !value.trim().is_empty() => (value, true),
+        _ => ("http://localhost:4566".to_string(), false),
+    }
 }
 
 fn timestamp() -> chrono::DateTime<Utc> {
@@ -46,10 +58,14 @@ async fn create_tenant(pool: &DbPool) -> Uuid {
 }
 
 #[tokio::test]
-#[ignore]
 async fn stores_report_artifacts_in_localstack_and_db() {
-    let db = match hera_db::connect(&database_url()).await {
+    let (database_url, explicit_database) = database_url();
+    let db = match hera_db::connect(&database_url).await {
         Ok(value) => value,
+        Err(err) if !explicit_database => {
+            eprintln!("skipping reporter integration test because Postgres is unavailable: {err}");
+            return;
+        }
         Err(err) => panic!("failed to connect integration database: {err}"),
     };
     let tenant_id = create_tenant(&db).await;
@@ -111,8 +127,7 @@ async fn stores_report_artifacts_in_localstack_and_db() {
     };
 
     let bucket = format!("hera-reports-{}", Uuid::new_v4().simple());
-    let endpoint =
-        std::env::var("AWS_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:4566".to_string());
+    let (endpoint, explicit_localstack) = localstack_url();
     let storage = ReportStorage::new(
         build_s3_client("us-east-1", Some(endpoint.as_str())).await,
         &bucket,
@@ -124,6 +139,12 @@ async fn stores_report_artifacts_in_localstack_and_db() {
             Ok(_) => break,
             Err(err) if err.to_string().contains("dispatch failure") && attempt < 29 => {
                 sleep(Duration::from_secs(1)).await;
+            }
+            Err(err) if !explicit_localstack => {
+                eprintln!(
+                    "skipping reporter integration test because LocalStack is unavailable: {err}"
+                );
+                return;
             }
             Err(err) => panic!("failed to create localstack bucket: {err}"),
         }

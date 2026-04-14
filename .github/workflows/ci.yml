@@ -10,6 +10,53 @@ on:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hera
+          POSTGRES_USER: hera
+          POSTGRES_PASSWORD: devpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hera -d hera"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      localstack:
+        image: localstack/localstack:4.12.0
+        env:
+          SERVICES: s3,kms
+          ACTIVATE_PRO: "0"
+          AWS_DEFAULT_REGION: us-east-1
+        ports:
+          - 4566:4566
+    env:
+      DATABASE_URL: postgres://hera:devpassword@localhost:5432/hera
+      REDIS_URL: redis://localhost:6379
+      AWS_ENDPOINT_URL: http://localhost:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      S3_BUCKET: hera-reports
+      KMS_KEY_ID: alias/hera-dev
+      DEV_KMS_KEY_BASE64: srX6ZqJwXKgkiFy9v/ZDR6FGnwdJStYiMV7mgRst5eY=
+      SIGNING_KEY_BASE64: EKrpZA7rHuL/2XfaLtww7v2DMUlvkAJzKK5LLetLC6Y=
+      LIGHTWALLETD_URL: https://mainnet.lightwalletd.com:9067
+      LIGHTWALLETD_FALLBACK_URLS: ""
+      NAMADA_INDEXER_URL: https://masp.namada.net
+      NAMADA_CHAIN_ID: namada.5f5de2dd1b88cba30586420
+      NAMADA_RPC_URL: https://rpc.namada.net
 
     steps:
       - name: Check out repository
@@ -33,4 +80,4 @@ jobs:
         run: cargo check --workspace
 
       - name: Run workspace tests
-        run: cargo test --workspace
+        run: TMPDIR=/tmp cargo test --workspace --lib --tests

@@ -16,9 +16,14 @@ use hera_types::{
 };
 use uuid::Uuid;
 
-fn database_url() -> String {
-    std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://hera:devpassword@localhost:5432/hera".to_string())
+fn database_url() -> (String, bool) {
+    match std::env::var("DATABASE_URL") {
+        Ok(value) if !value.trim().is_empty() => (value, true),
+        _ => (
+            "postgres://hera:devpassword@localhost:5432/hera".to_string(),
+            false,
+        ),
+    }
 }
 
 fn test_timestamp() -> chrono::DateTime<Utc> {
@@ -50,10 +55,14 @@ async fn create_tenant(pool: &DbPool) -> Uuid {
 }
 
 #[tokio::test]
-#[ignore]
 async fn repo_round_trip_persists_cases_events_jobs_and_keys() {
-    let pool = match hera_db::connect(&database_url()).await {
+    let (database_url, explicit_database) = database_url();
+    let pool = match hera_db::connect(&database_url).await {
         Ok(value) => value,
+        Err(err) if !explicit_database => {
+            eprintln!("skipping DB integration test because Postgres is unavailable: {err}");
+            return;
+        }
         Err(err) => panic!("failed to connect test database: {err}"),
     };
     let tenant_id = create_tenant(&pool).await;

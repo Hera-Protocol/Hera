@@ -15,30 +15,68 @@ use serde_json::Value;
 use tower::util::ServiceExt as _;
 use uuid::Uuid;
 
-fn database_url() -> String {
-    std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://hera:devpassword@localhost:5432/hera".to_string())
+fn database_url() -> (String, bool) {
+    match std::env::var("DATABASE_URL") {
+        Ok(value) if !value.trim().is_empty() => (value, true),
+        _ => (
+            "postgres://hera:devpassword@localhost:5432/hera".to_string(),
+            false,
+        ),
+    }
 }
 
-fn redis_url() -> String {
-    std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string())
+fn redis_url() -> (String, bool) {
+    match std::env::var("REDIS_URL") {
+        Ok(value) if !value.trim().is_empty() => (value, true),
+        _ => ("redis://localhost:6379".to_string(), false),
+    }
+}
+
+fn localstack_endpoint() -> (String, bool) {
+    match std::env::var("AWS_ENDPOINT_URL") {
+        Ok(value) if !value.trim().is_empty() => (value, true),
+        _ => ("http://localhost:4566".to_string(), false),
+    }
 }
 
 async fn test_s3_client() -> aws_sdk_s3::Client {
-    let endpoint =
-        std::env::var("AWS_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:4566".to_string());
+    let (endpoint, _) = localstack_endpoint();
     build_s3_client("us-east-1", Some(endpoint.as_str())).await
 }
 
-async fn setup_app(queue_name: &str) -> (axum::Router, DbPool) {
-    let db = match hera_db::connect(&database_url()).await {
+async fn setup_app(queue_name: &str) -> Option<(axum::Router, DbPool)> {
+    let (database_url, explicit_database) = database_url();
+    let db = match hera_db::connect(&database_url).await {
         Ok(value) => value,
+        Err(err) if !explicit_database => {
+            eprintln!("skipping API integration test because Postgres is unavailable: {err}");
+            return None;
+        }
         Err(err) => panic!("failed to connect integration database: {err}"),
     };
-    let redis = match RedisConfig::from_url(redis_url()).create_pool(Some(Runtime::Tokio1)) {
+    let (redis_url, explicit_redis) = redis_url();
+    let redis = match RedisConfig::from_url(redis_url).create_pool(Some(Runtime::Tokio1)) {
         Ok(value) => value,
         Err(err) => panic!("failed to create redis pool: {err}"),
     };
+    let mut redis_conn = match redis.get().await {
+        Ok(value) => value,
+        Err(err) if !explicit_redis => {
+            eprintln!("skipping API integration test because Redis is unavailable: {err}");
+            return None;
+        }
+        Err(err) => panic!("failed to connect to Redis: {err}"),
+    };
+    if let Err(err) = redis::cmd("PING")
+        .query_async::<String>(&mut redis_conn)
+        .await
+    {
+        if !explicit_redis {
+            eprintln!("skipping API integration test because Redis did not respond: {err}");
+            return None;
+        }
+        panic!("failed to ping Redis: {err}");
+    }
     let crypto: Arc<dyn KmsClient> = match LocalDevKms::new(
         "alias/hera-dev",
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
@@ -52,7 +90,12 @@ async fn setup_app(queue_name: &str) -> (axum::Router, DbPool) {
         db.clone(),
         None,
     ));
+    let (_, explicit_localstack) = localstack_endpoint();
     if let Err(err) = report_storage.ensure_bucket().await {
+        if !explicit_localstack {
+            eprintln!("skipping API integration test because LocalStack is unavailable: {err}");
+            return None;
+        }
         panic!("failed to ensure integration test bucket exists: {err}");
     }
 
@@ -66,7 +109,7 @@ async fn setup_app(queue_name: &str) -> (axum::Router, DbPool) {
         namada_chain_id: "namada.5f5de2dd1b88cba30586420".into(),
     };
 
-    (build_router(state), db)
+    Some((build_router(state), db))
 }
 
 async fn create_tenant(pool: &DbPool, api_key: &str) -> Uuid {
@@ -103,11 +146,12 @@ async fn response_json(response: axum::response::Response) -> Value {
 }
 
 #[tokio::test]
-#[ignore]
 async fn api_enforces_auth_tenant_isolation_and_scan_enqueue() {
     let queue_name = format!("hera:test:api:pending:{}", Uuid::new_v4());
     let processing_queue_name = format!("hera:test:api:processing:{}", Uuid::new_v4());
-    let (app, db) = setup_app(&queue_name).await;
+    let Some((app, db)) = setup_app(&queue_name).await else {
+        return;
+    };
     let tenant_token = format!("token-{}", Uuid::new_v4());
     let other_token = format!("token-{}", Uuid::new_v4());
     let tenant_id = create_tenant(&db, &tenant_token).await;
@@ -223,7 +267,8 @@ async fn api_enforces_auth_tenant_isolation_and_scan_enqueue() {
     };
     assert_eq!(scan_response.status(), StatusCode::CREATED);
 
-    let redis = match RedisConfig::from_url(redis_url()).create_pool(Some(Runtime::Tokio1)) {
+    let (redis_url, _) = redis_url();
+    let redis = match RedisConfig::from_url(redis_url).create_pool(Some(Runtime::Tokio1)) {
         Ok(value) => value,
         Err(err) => panic!("failed to create redis pool for verification: {err}"),
     };
