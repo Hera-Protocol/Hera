@@ -26,6 +26,9 @@ async fn main() -> anyhow::Result<()> {
         db.clone(),
         None,
     ));
+    if config.aws_endpoint_url.is_some() {
+        report_storage.ensure_bucket().await?;
+    }
     let state = AppState {
         db,
         redis,

@@ -40,6 +40,9 @@ async fn main() -> anyhow::Result<()> {
         db.clone(),
         config.report_kms_key_id.clone(),
     ));
+    if config.aws_endpoint_url.is_some() {
+        report_storage.ensure_bucket().await?;
+    }
 
     // We run multiple worker tasks not multiple processes in Stage 1. Stage 4
     // will scale to separate worker pods.

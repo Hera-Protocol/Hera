@@ -4,7 +4,7 @@ use hera_db::{
     repos::{cases::CaseRepo, reports::ReportRepo, workspaces::WorkspaceRepo},
     DbPool,
 };
-use hera_reporter::{build_manifest, build_pdf, ReportStorage};
+use hera_reporter::{build_manifest, build_pdf, build_s3_client, ReportStorage};
 use hera_types::{
     Asset, CanonicalEvent, ChainId, Counterparty, CounterpartyVisibility, EventMemo,
     EventProvenance, EventType, Network,
@@ -15,10 +15,6 @@ use uuid::Uuid;
 fn database_url() -> String {
     std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://hera:devpassword@localhost:5432/hera".to_string())
-}
-
-fn localstack_url() -> String {
-    std::env::var("AWS_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:4566".to_string())
 }
 
 fn timestamp() -> chrono::DateTime<Utc> {
@@ -47,50 +43,6 @@ async fn create_tenant(pool: &DbPool) -> Uuid {
     }
 
     tenant_id
-}
-
-async fn localstack_s3_client() -> aws_sdk_s3::Client {
-    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_sdk_s3::config::Region::new("us-east-1"))
-        .endpoint_url(localstack_url())
-        .credentials_provider(aws_sdk_s3::config::Credentials::new(
-            "test",
-            "test",
-            None,
-            None,
-            "integration-test",
-        ))
-        .load()
-        .await;
-
-    let config = aws_sdk_s3::config::Builder::from(&shared_config)
-        .force_path_style(true)
-        .build();
-    aws_sdk_s3::Client::from_conf(config)
-}
-
-async fn ensure_bucket(client: &aws_sdk_s3::Client, bucket: &str) {
-    for attempt in 0..30 {
-        let create_result = client.create_bucket().bucket(bucket).send().await;
-        match create_result {
-            Ok(_) => return,
-            Err(err) => {
-                let message = err.to_string();
-                if message.contains("BucketAlreadyOwnedByYou")
-                    || message.contains("BucketAlreadyExists")
-                {
-                    return;
-                }
-
-                if message.contains("dispatch failure") && attempt < 29 {
-                    sleep(Duration::from_secs(1)).await;
-                    continue;
-                }
-
-                panic!("failed to create localstack bucket: {err}");
-            }
-        }
-    }
 }
 
 #[tokio::test]
@@ -159,10 +111,23 @@ async fn stores_report_artifacts_in_localstack_and_db() {
     };
 
     let bucket = format!("hera-reports-{}", Uuid::new_v4().simple());
-    let client = localstack_s3_client().await;
-    ensure_bucket(&client, &bucket).await;
-
-    let storage = ReportStorage::new(client, &bucket, db.clone(), None);
+    let endpoint =
+        std::env::var("AWS_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:4566".to_string());
+    let storage = ReportStorage::new(
+        build_s3_client("us-east-1", Some(endpoint.as_str())).await,
+        &bucket,
+        db.clone(),
+        None,
+    );
+    for attempt in 0..30 {
+        match storage.ensure_bucket().await {
+            Ok(_) => break,
+            Err(err) if err.to_string().contains("dispatch failure") && attempt < 29 => {
+                sleep(Duration::from_secs(1)).await;
+            }
+            Err(err) => panic!("failed to create localstack bucket: {err}"),
+        }
+    }
     let refs = match storage.store_report(case.id, &manifest, &pdf).await {
         Ok(value) => value,
         Err(err) => panic!("failed to store report artifacts: {err}"),

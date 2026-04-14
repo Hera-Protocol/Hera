@@ -45,6 +45,45 @@ impl ReportStorage {
         }
     }
 
+    /// Ensures the configured bucket exists before writes begin. This is used
+    /// for LocalStack-backed development and integration tests so report
+    /// storage behaves like a provisioned environment without any manual setup.
+    pub async fn ensure_bucket(&self) -> Result<(), ReporterError> {
+        if self
+            .client
+            .head_bucket()
+            .bucket(&self.bucket)
+            .send()
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        match self
+            .client
+            .create_bucket()
+            .bucket(&self.bucket)
+            .send()
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                let message = err.to_string();
+                if message.contains("BucketAlreadyOwnedByYou")
+                    || message.contains("BucketAlreadyExists")
+                {
+                    Ok(())
+                } else {
+                    Err(ReporterError::Storage(format!(
+                        "failed to ensure bucket {} exists: {message}",
+                        self.bucket
+                    )))
+                }
+            }
+        }
+    }
+
     /// Uploads the JSON and PDF artifacts with server-side encryption. Object
     /// keys follow the pattern `reports/{case_id}/{timestamp}.json`. This makes
     /// artifacts addressable, immutable, and auditable by path alone.

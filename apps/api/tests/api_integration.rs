@@ -8,7 +8,7 @@ use deadpool_redis::{Config as RedisConfig, Runtime};
 use hera_api::{router::build_router, state::AppState};
 use hera_crypto::{KmsClient, LocalDevKms};
 use hera_db::{repos::workspaces::WorkspaceRepo, DbPool};
-use hera_reporter::ReportStorage;
+use hera_reporter::{build_s3_client, ReportStorage};
 use hera_worker::jobs::scan_job::dequeue;
 use http_body_util::BodyExt as _;
 use serde_json::Value;
@@ -25,19 +25,9 @@ fn redis_url() -> String {
 }
 
 async fn test_s3_client() -> aws_sdk_s3::Client {
-    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_sdk_s3::config::Region::new("us-east-1"))
-        .credentials_provider(aws_sdk_s3::config::Credentials::new(
-            "test",
-            "test",
-            None,
-            None,
-            "integration-test",
-        ))
-        .load()
-        .await;
-
-    aws_sdk_s3::Client::new(&shared_config)
+    let endpoint =
+        std::env::var("AWS_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:4566".to_string());
+    build_s3_client("us-east-1", Some(endpoint.as_str())).await
 }
 
 async fn setup_app(queue_name: &str) -> (axum::Router, DbPool) {
@@ -62,6 +52,9 @@ async fn setup_app(queue_name: &str) -> (axum::Router, DbPool) {
         db.clone(),
         None,
     ));
+    if let Err(err) = report_storage.ensure_bucket().await {
+        panic!("failed to ensure integration test bucket exists: {err}");
+    }
 
     let state = AppState {
         db: db.clone(),
