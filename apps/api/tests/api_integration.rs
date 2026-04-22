@@ -7,7 +7,13 @@ use axum::{
 use deadpool_redis::{Config as RedisConfig, Runtime};
 use hera_api::{router::build_router, state::AppState};
 use hera_crypto::{KmsClient, LocalDevKms};
-use hera_db::{repos::workspaces::WorkspaceRepo, DbPool};
+use hera_db::{
+    repos::{
+        reports::{ReportRepo, StoredArtifactRefs},
+        workspaces::WorkspaceRepo,
+    },
+    DbPool,
+};
 use hera_reporter::{build_s3_client, ReportStorage};
 use hera_worker::jobs::scan_job::dequeue;
 use http_body_util::BodyExt as _;
@@ -142,6 +148,72 @@ async fn response_json(response: axum::response::Response) -> Value {
     match serde_json::from_slice::<Value>(&bytes) {
         Ok(value) => value,
         Err(err) => panic!("failed to parse response json: {err}"),
+    }
+}
+
+async fn create_workspace_via_api(app: &axum::Router, token: &str, name: &str) -> Uuid {
+    let workspace_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/v1/workspaces")
+                .header(AUTHORIZATION, format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(format!(r#"{{"name":"{name}"}}"#)))
+                .unwrap_or_else(|err| panic!("failed to build workspace request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("workspace request failed unexpectedly: {err}"),
+    };
+    assert_eq!(workspace_response.status(), StatusCode::CREATED);
+    let workspace_json = response_json(workspace_response).await;
+    match workspace_json
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok())
+    {
+        Some(value) => value,
+        None => panic!("workspace response did not include a valid id"),
+    }
+}
+
+async fn create_case_via_api(
+    app: &axum::Router,
+    token: &str,
+    workspace_id: Uuid,
+    chain: &str,
+    network: &str,
+) -> Uuid {
+    let case_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/v1/cases")
+                .header(AUTHORIZATION, format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(format!(
+                    r#"{{"workspace_id":"{workspace_id}","chain":"{chain}","network":"{network}"}}"#
+                )))
+                .unwrap_or_else(|err| panic!("failed to build case request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("case request failed unexpectedly: {err}"),
+    };
+    assert_eq!(case_response.status(), StatusCode::CREATED);
+    let case_json = response_json(case_response).await;
+    match case_json
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok())
+    {
+        Some(value) => value,
+        None => panic!("case response did not include a valid id"),
     }
 }
 
@@ -326,4 +398,246 @@ async fn api_enforces_auth_tenant_isolation_and_scan_enqueue() {
         Err(err) => panic!("failed to create other tenant workspace fixture: {err}"),
     };
     assert_ne!(tenant_workspace.tenant_id, tenant_id);
+}
+
+#[tokio::test]
+async fn api_lists_workspace_resources_and_case_detail() {
+    let queue_name = format!("hera:test:api:list:pending:{}", Uuid::new_v4());
+    let Some((app, db)) = setup_app(&queue_name).await else {
+        return;
+    };
+    let tenant_token = format!("token-{}", Uuid::new_v4());
+    let other_token = format!("token-{}", Uuid::new_v4());
+    let tenant_id = create_tenant(&db, &tenant_token).await;
+    let _other_tenant_id = create_tenant(&db, &other_token).await;
+
+    let workspace_id = create_workspace_via_api(&app, &tenant_token, "stage-one-workspace").await;
+    let case_id = create_case_via_api(&app, &tenant_token, workspace_id, "ZCASH", "TESTNET").await;
+    let case_id_string = case_id.to_string();
+
+    let import_key_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(format!("/v1/cases/{case_id}/zcash/import-view-key"))
+                .header(AUTHORIZATION, format!("Bearer {tenant_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"raw_key":"zxviews1q0testkey"}"#))
+                .unwrap_or_else(|err| panic!("failed to build import key request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("import key request failed unexpectedly: {err}"),
+    };
+    assert_eq!(import_key_response.status(), StatusCode::CREATED);
+
+    let report_id = match ReportRepo::new(&db)
+        .upsert_report_artifacts(
+            case_id,
+            &StoredArtifactRefs {
+                json_s3_key: format!("reports/{case_id}/fixture.json"),
+                pdf_s3_key: format!("reports/{case_id}/fixture.pdf"),
+                json_sha256: "json-hash".into(),
+                pdf_sha256: "pdf-hash".into(),
+            },
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("failed to seed report refs: {err}"),
+    };
+    assert_ne!(report_id, Uuid::nil());
+
+    let workspaces_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/v1/workspaces?limit=10&offset=0")
+                .header(AUTHORIZATION, format!("Bearer {tenant_token}"))
+                .body(Body::empty())
+                .unwrap_or_else(|err| panic!("failed to build workspaces request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("workspaces request failed unexpectedly: {err}"),
+    };
+    assert_eq!(workspaces_response.status(), StatusCode::OK);
+    let workspaces_json = response_json(workspaces_response).await;
+    assert_eq!(
+        workspaces_json
+            .get("items")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(1)
+    );
+
+    let cases_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(format!(
+                    "/v1/workspaces/{workspace_id}/cases?limit=10&offset=0"
+                ))
+                .header(AUTHORIZATION, format!("Bearer {tenant_token}"))
+                .body(Body::empty())
+                .unwrap_or_else(|err| panic!("failed to build cases list request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("cases list request failed unexpectedly: {err}"),
+    };
+    assert_eq!(cases_response.status(), StatusCode::OK);
+    let cases_json = response_json(cases_response).await;
+    assert_eq!(
+        cases_json
+            .get("items")
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("id"))
+            .and_then(Value::as_str),
+        Some(case_id_string.as_str())
+    );
+    assert_eq!(
+        cases_json
+            .get("items")
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("scan_status"))
+            .and_then(Value::as_str),
+        Some("CREATED")
+    );
+
+    let case_detail_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(format!("/v1/cases/{case_id}"))
+                .header(AUTHORIZATION, format!("Bearer {tenant_token}"))
+                .body(Body::empty())
+                .unwrap_or_else(|err| panic!("failed to build case detail request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("case detail request failed unexpectedly: {err}"),
+    };
+    assert_eq!(case_detail_response.status(), StatusCode::OK);
+    let case_detail_json = response_json(case_detail_response).await;
+    assert_eq!(
+        case_detail_json.get("id").and_then(Value::as_str),
+        Some(case_id_string.as_str())
+    );
+
+    let keys_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(format!(
+                    "/v1/workspaces/{workspace_id}/keys?limit=10&offset=0"
+                ))
+                .header(AUTHORIZATION, format!("Bearer {tenant_token}"))
+                .body(Body::empty())
+                .unwrap_or_else(|err| panic!("failed to build keys request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("keys request failed unexpectedly: {err}"),
+    };
+    assert_eq!(keys_response.status(), StatusCode::OK);
+    let keys_json = response_json(keys_response).await;
+    assert_eq!(
+        keys_json
+            .get("items")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(1)
+    );
+
+    let reports_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(format!(
+                    "/v1/workspaces/{workspace_id}/reports?limit=10&offset=0"
+                ))
+                .header(AUTHORIZATION, format!("Bearer {tenant_token}"))
+                .body(Body::empty())
+                .unwrap_or_else(|err| panic!("failed to build reports request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("reports request failed unexpectedly: {err}"),
+    };
+    assert_eq!(reports_response.status(), StatusCode::OK);
+    let reports_json = response_json(reports_response).await;
+    assert_eq!(
+        reports_json
+            .get("items")
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("case_id"))
+            .and_then(Value::as_str),
+        Some(case_id_string.as_str())
+    );
+
+    let audit_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(format!(
+                    "/v1/workspaces/{workspace_id}/audit-logs?limit=10&offset=0"
+                ))
+                .header(AUTHORIZATION, format!("Bearer {tenant_token}"))
+                .body(Body::empty())
+                .unwrap_or_else(|err| panic!("failed to build audit log request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("audit log request failed unexpectedly: {err}"),
+    };
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_json = response_json(audit_response).await;
+    let actions = match audit_json.get("items").and_then(Value::as_array) {
+        Some(items) => items
+            .iter()
+            .filter_map(|item| item.get("action").and_then(Value::as_str))
+            .collect::<Vec<_>>(),
+        None => panic!("audit response did not include items"),
+    };
+    assert!(actions.contains(&"CASE_CREATED"));
+    assert!(actions.contains(&"KEY_IMPORT"));
+
+    let forbidden_workspace_response = match app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(format!(
+                    "/v1/workspaces/{workspace_id}/cases?limit=10&offset=0"
+                ))
+                .header(AUTHORIZATION, format!("Bearer {other_token}"))
+                .body(Body::empty())
+                .unwrap_or_else(|err| panic!("failed to build forbidden workspace request: {err}")),
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => panic!("forbidden workspace request failed unexpectedly: {err}"),
+    };
+    assert_eq!(forbidden_workspace_response.status(), StatusCode::FORBIDDEN);
+
+    assert_ne!(tenant_id, Uuid::nil());
 }

@@ -1,10 +1,15 @@
-use axum::{extract::State, Extension, Json};
+use axum::{
+    extract::{Query, State},
+    Extension, Json,
+};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use hera_db::repos::workspaces::WorkspaceRepo;
 
 use crate::{
     error::ApiError,
+    handlers::{PaginatedResponse, PaginationQuery},
     state::{AppState, TenantContext},
 };
 
@@ -33,6 +38,34 @@ pub async fn create_workspace(
     ))
 }
 
+/// Lists workspaces owned by the authenticated tenant.
+#[tracing::instrument(skip(state))]
+pub async fn list_workspaces(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<PaginatedResponse<WorkspaceSummaryResponse>>, ApiError> {
+    let page = query.validate()?;
+    let workspaces = WorkspaceRepo::new(&state.db)
+        .list_workspaces_for_tenant(tenant.tenant_id, page.limit, page.offset)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(PaginatedResponse {
+        items: workspaces
+            .into_iter()
+            .map(|workspace| WorkspaceSummaryResponse {
+                id: workspace.id,
+                name: workspace.name,
+                created_at: workspace.created_at,
+                updated_at: workspace.updated_at,
+            })
+            .collect(),
+        limit: page.limit,
+        offset: page.offset,
+    }))
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateWorkspaceRequest {
@@ -43,4 +76,12 @@ pub struct CreateWorkspaceRequest {
 pub struct CreateWorkspaceResponse {
     pub id: uuid::Uuid,
     pub name: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkspaceSummaryResponse {
+    pub id: uuid::Uuid,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

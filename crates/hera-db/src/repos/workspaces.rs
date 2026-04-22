@@ -53,6 +53,48 @@ impl<'a> WorkspaceRepo<'a> {
             updated_at: row.updated_at,
         })
     }
+
+    /// Lists workspaces for one tenant in a deterministic order so UIs can page
+    /// through tenant scopes without scanning unrelated records.
+    pub async fn list_workspaces_for_tenant(
+        &self,
+        tenant_id: Uuid,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<WorkspaceRecord>, DbError> {
+        let rows = sqlx::query_as::<_, WorkspaceRow>(
+            r#"
+            SELECT id, tenant_id, name, created_at, updated_at
+            FROM workspaces
+            WHERE tenant_id = $1
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(
+            i64::try_from(limit)
+                .map_err(|_| DbError::InvalidData("workspace list limit overflow".into()))?,
+        )
+        .bind(
+            i64::try_from(offset)
+                .map_err(|_| DbError::InvalidData("workspace list offset overflow".into()))?,
+        )
+        .fetch_all(self.pool)
+        .await
+        .map_err(DbError::Query)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| WorkspaceRecord {
+                id: row.id,
+                tenant_id: row.tenant_id,
+                name: row.name,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+            .collect())
+    }
 }
 
 #[derive(Debug, FromRow)]

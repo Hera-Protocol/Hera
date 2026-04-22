@@ -1,20 +1,31 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
+    Extension, Json,
 };
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use hera_db::repos::{jobs::ScanJobRepo, reports::ReportRepo};
-use hera_types::ScanJobStatus;
+use hera_db::repos::{
+    audit::{AuditAction, AuditEntry},
+    jobs::ScanJobRepo,
+    reports::ReportRepo,
+    tenancy::TenancyRepo,
+};
+use hera_types::{ChainId, Network, ScanJobStatus};
 
-use crate::error::ApiError;
-use crate::state::AppState;
+use crate::{
+    error::ApiError,
+    handlers::{append_audit, PaginatedResponse, PaginationQuery},
+    state::{AppState, TenantContext},
+};
 
 /// Returns the signed JSON report once the case has reached SIGNED.
 #[tracing::instrument(skip(state))]
 pub async fn report_json(
     State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(case_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     ensure_signed(&state, case_id).await?;
@@ -28,6 +39,23 @@ pub async fn report_json(
         .load_artifact_bytes(&artifacts.json_s3_key)
         .await
         .map_err(ApiError::internal)?;
+    append_audit(
+        &state,
+        AuditEntry {
+            actor_id: tenant.tenant_id,
+            action: AuditAction::ReportExported,
+            resource_id: case_id,
+            resource_type: "case".to_string(),
+            ip_addr: None,
+            metadata: serde_json::json!({
+                "case_id": case_id,
+                "format": "json",
+                "sha256": artifacts.json_sha256.clone(),
+            }),
+            occurred_at: None,
+        },
+    )
+    .await?;
 
     Ok(artifact_response(
         StatusCode::OK,
@@ -41,6 +69,7 @@ pub async fn report_json(
 #[tracing::instrument(skip(state))]
 pub async fn report_pdf(
     State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(case_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     ensure_signed(&state, case_id).await?;
@@ -54,6 +83,23 @@ pub async fn report_pdf(
         .load_artifact_bytes(&artifacts.pdf_s3_key)
         .await
         .map_err(ApiError::internal)?;
+    append_audit(
+        &state,
+        AuditEntry {
+            actor_id: tenant.tenant_id,
+            action: AuditAction::ReportExported,
+            resource_id: case_id,
+            resource_type: "case".to_string(),
+            ip_addr: None,
+            metadata: serde_json::json!({
+                "case_id": case_id,
+                "format": "pdf",
+                "sha256": artifacts.pdf_sha256.clone(),
+            }),
+            occurred_at: None,
+        },
+    )
+    .await?;
 
     Ok(artifact_response(
         StatusCode::OK,
@@ -61,6 +107,47 @@ pub async fn report_pdf(
         &artifacts.pdf_sha256,
         body,
     ))
+}
+
+/// Lists reports for one workspace.
+#[tracing::instrument(skip(state))]
+pub async fn list_workspace_reports(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+    Path(workspace_id): Path<Uuid>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<PaginatedResponse<WorkspaceReportResponse>>, ApiError> {
+    let page = query.validate()?;
+    let belongs = TenancyRepo::new(&state.db)
+        .workspace_belongs_to_tenant(workspace_id, tenant.tenant_id)
+        .await
+        .map_err(ApiError::internal)?;
+    if !belongs {
+        return Err(ApiError::Forbidden("workspace does not belong to tenant"));
+    }
+
+    let reports = ReportRepo::new(&state.db)
+        .list_reports_for_workspace(workspace_id, page.limit, page.offset)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(PaginatedResponse {
+        items: reports
+            .into_iter()
+            .map(|report| WorkspaceReportResponse {
+                case_id: report.case_id,
+                chain: report.chain,
+                network: report.network,
+                status: report.report_status,
+                json_sha256: report.json_sha256,
+                pdf_sha256: report.pdf_sha256,
+                created_at: report.created_at,
+                updated_at: report.updated_at,
+            })
+            .collect(),
+        limit: page.limit,
+        offset: page.offset,
+    }))
 }
 
 async fn ensure_signed(state: &AppState, case_id: Uuid) -> Result<(), ApiError> {
@@ -95,4 +182,16 @@ fn artifact_response(
         response.headers_mut().insert("x-artifact-sha256", value);
     }
     response
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct WorkspaceReportResponse {
+    pub case_id: Uuid,
+    pub chain: ChainId,
+    pub network: Network,
+    pub status: String,
+    pub json_sha256: String,
+    pub pdf_sha256: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

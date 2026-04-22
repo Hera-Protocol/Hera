@@ -9,7 +9,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{cases, keys, reports, workspaces},
+    handlers::{audit, cases, keys, reports, workspaces},
     middleware::{auth, tenant_isolation},
     state::AppState,
 };
@@ -17,8 +17,28 @@ use crate::{
 /// Builds the HTTP router with tenant-aware middleware and the Stage 1 case APIs.
 pub fn build_router(state: AppState) -> Router {
     Router::new()
-        .route("/v1/workspaces", post(workspaces::create_workspace))
+        .route(
+            "/v1/workspaces",
+            get(workspaces::list_workspaces).post(workspaces::create_workspace),
+        )
         .route("/v1/cases", post(cases::create_case))
+        .route(
+            "/v1/workspaces/:workspace_id/cases",
+            get(cases::list_cases_for_workspace),
+        )
+        .route(
+            "/v1/workspaces/:workspace_id/reports",
+            get(reports::list_workspace_reports),
+        )
+        .route(
+            "/v1/workspaces/:workspace_id/keys",
+            get(keys::list_workspace_view_keys),
+        )
+        .route(
+            "/v1/workspaces/:workspace_id/audit-logs",
+            get(audit::list_workspace_audit_logs),
+        )
+        .route("/v1/cases/:id", get(cases::get_case))
         .route(
             "/v1/cases/:id/zcash/import-view-key",
             post(keys::import_zcash_view_key),

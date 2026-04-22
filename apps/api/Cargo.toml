@@ -13,6 +13,7 @@ doctest = false
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+chrono.workspace = true
 aws-config = "1"
 aws-sdk-s3 = "1"
 deadpool-redis = "0.18"
