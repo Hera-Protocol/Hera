@@ -1,4 +1,5 @@
 use axum::{
+    http::{header, Method},
     middleware,
     routing::{get, post},
     Router,
@@ -17,6 +18,22 @@ use crate::{
 
 /// Builds the HTTP router with tenant-aware middleware and the Stage 1 case APIs.
 pub fn build_router(state: AppState) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            header::ACCEPT,
+            header::ORIGIN,
+            header::HeaderName::from_static("ngrok-skip-browser-warning"),
+        ])
+        .expose_headers([
+            header::HeaderName::from_static("x-artifact-sha256"),
+            header::HeaderName::from_static("x-request-id"),
+        ])
+        .max_age(std::time::Duration::from_secs(60 * 60));
+
     Router::new()
         .route(
             "/v1/workspaces",
@@ -62,12 +79,7 @@ pub fn build_router(state: AppState) -> Router {
             auth::auth_middleware,
         ))
         // Stage 1 frontend runs on a separate origin during local/ngrok demos.
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
+        .layer(cors)
         .layer(TraceLayer::new_for_http())
         .layer(PropagateRequestIdLayer::x_request_id())
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))

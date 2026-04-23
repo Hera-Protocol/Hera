@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::{header::AUTHORIZATION, Request},
+    http::{header::AUTHORIZATION, Method, Request},
     middleware::Next,
     response::Response,
 };
@@ -19,6 +19,10 @@ pub async fn auth_middleware(
     mut request: Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, ApiError> {
+    if request.method() == Method::OPTIONS {
+        return Ok(next.run(request).await);
+    }
+
     let header_value = request
         .headers()
         .get(AUTHORIZATION)

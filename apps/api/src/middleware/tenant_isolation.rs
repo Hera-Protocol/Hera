@@ -1,4 +1,9 @@
-use axum::{extract::State, http::Request, middleware::Next, response::Response};
+use axum::{
+    extract::State,
+    http::{Method, Request},
+    middleware::Next,
+    response::Response,
+};
 use uuid::Uuid;
 
 use hera_db::repos::tenancy::TenancyRepo;
@@ -15,6 +20,10 @@ pub async fn tenant_isolation(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, ApiError> {
+    if request.method() == Method::OPTIONS {
+        return Ok(next.run(request).await);
+    }
+
     let tenant = request
         .extensions()
         .get::<TenantContext>()
