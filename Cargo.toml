@@ -3,6 +3,7 @@ members = [
     "apps/api",
     "apps/worker",
     "apps/reporter",
+    "packages/sdk-core",
     "crates/hera-types",
     "crates/hera-core",
     "crates/hera-crypto",

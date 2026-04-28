@@ -1,0 +1,13 @@
+[package]
+name = "hera-sdk-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+hera-types = { path = "../../crates/hera-types" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
