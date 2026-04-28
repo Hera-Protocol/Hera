@@ -2,14 +2,15 @@ use axum::{
     extract::{Query, State},
     Extension, Json,
 };
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 
 use hera_db::repos::workspaces::WorkspaceRepo;
+use hera_types::api::{
+    CreateWorkspaceRequest, CreateWorkspaceResponse, PaginatedResponse, WorkspaceSummaryResponse,
+};
 
 use crate::{
     error::ApiError,
-    handlers::{PaginatedResponse, PaginationQuery},
+    handlers::PaginationQuery,
     state::{AppState, TenantContext},
 };
 
@@ -64,24 +65,4 @@ pub async fn list_workspaces(
         limit: page.limit,
         offset: page.offset,
     }))
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CreateWorkspaceRequest {
-    pub name: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CreateWorkspaceResponse {
-    pub id: uuid::Uuid,
-    pub name: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct WorkspaceSummaryResponse {
-    pub id: uuid::Uuid,
-    pub name: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }

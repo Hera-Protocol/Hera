@@ -2,8 +2,6 @@ use axum::{
     extract::{Path, Query, State},
     Extension, Json,
 };
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use hera_db::repos::{
@@ -14,12 +12,18 @@ use hera_db::repos::{
     jobs::ScanJobRepo,
     tenancy::TenancyRepo,
 };
-use hera_types::{CanonicalEvent, ChainId, Network, ScanJobStatus};
+use hera_types::{
+    api::{
+        CaseDetailResponse, CaseSummaryResponse, CreateCaseRequest, CreateCaseResponse,
+        GetCaseStatusResponse, PaginatedResponse, ScanCaseResponse,
+    },
+    CanonicalEvent, ScanJobStatus,
+};
 use hera_worker::jobs::scan_job::{enqueue, ScanJobMessage};
 
 use crate::{
     error::ApiError,
-    handlers::{append_audit, PaginatedResponse, PaginationQuery},
+    handlers::{append_audit, PaginationQuery},
     state::{AppState, TenantContext},
 };
 
@@ -222,53 +226,4 @@ pub async fn get_case_events(
         .await
         .map_err(ApiError::internal)?;
     Ok(Json(events))
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CreateCaseRequest {
-    pub workspace_id: Uuid,
-    pub chain: ChainId,
-    pub network: Network,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CreateCaseResponse {
-    pub id: Uuid,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ScanCaseResponse {
-    pub job_id: Uuid,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GetCaseStatusResponse {
-    pub status: ScanJobStatus,
-    pub last_checkpoint: Option<u64>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CaseSummaryResponse {
-    pub id: Uuid,
-    pub workspace_id: Uuid,
-    pub chain: ChainId,
-    pub network: Network,
-    pub case_status: String,
-    pub scan_status: ScanJobStatus,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CaseDetailResponse {
-    pub id: Uuid,
-    pub workspace_id: Uuid,
-    pub chain: ChainId,
-    pub network: Network,
-    pub case_status: String,
-    pub scan_status: ScanJobStatus,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub last_checkpoint: Option<u64>,
 }

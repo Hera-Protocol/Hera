@@ -4,8 +4,6 @@ use axum::{
     extract::{Path, Query, State},
     Extension, Json,
 };
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -16,11 +14,17 @@ use hera_db::repos::{
     tenancy::TenancyRepo,
 };
 use hera_namada_adapter::parse_and_validate as parse_namada_view_key;
-use hera_types::ChainId;
+use hera_types::{
+    api::{
+        ImportViewingKeyRequest, ImportViewingKeyResponse, PaginatedResponse,
+        WorkspaceViewKeyResponse,
+    },
+    ChainId,
+};
 
 use crate::{
     error::ApiError,
-    handlers::{append_audit, PaginatedResponse, PaginationQuery},
+    handlers::{append_audit, PaginationQuery},
     state::{AppState, TenantContext},
 };
 
@@ -169,27 +173,4 @@ pub async fn list_workspace_view_keys(
         limit: page.limit,
         offset: page.offset,
     }))
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ImportViewingKeyRequest {
-    pub raw_key: String,
-    pub birthday_height: Option<u64>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ImportViewingKeyResponse {
-    pub key_ref: Uuid,
-}
-
-#[derive(Debug, Serialize)]
-pub struct WorkspaceViewKeyResponse {
-    pub id: Uuid,
-    pub case_id: Uuid,
-    pub chain: ChainId,
-    pub key_ref: String,
-    pub birthday_height: Option<u64>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }

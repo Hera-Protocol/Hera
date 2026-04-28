@@ -2,15 +2,14 @@ use axum::{
     extract::{Path, Query, State},
     Extension, Json,
 };
-use chrono::{DateTime, Utc};
-use serde::Serialize;
 use uuid::Uuid;
 
 use hera_db::repos::{audit::AuditRepo, tenancy::TenancyRepo};
+use hera_types::api::{AuditLogResponse, PaginatedResponse};
 
 use crate::{
     error::ApiError,
-    handlers::{PaginatedResponse, PaginationQuery},
+    handlers::PaginationQuery,
     state::{AppState, TenantContext},
 };
 
@@ -54,17 +53,4 @@ pub async fn list_workspace_audit_logs(
         limit: page.limit,
         offset: page.offset,
     }))
-}
-
-#[derive(Debug, Serialize)]
-pub struct AuditLogResponse {
-    pub id: Uuid,
-    pub actor_id: Uuid,
-    pub action: String,
-    pub resource_id: Uuid,
-    pub resource_type: String,
-    pub ip_addr: Option<String>,
-    pub metadata: serde_json::Value,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }

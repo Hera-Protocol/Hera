@@ -4,7 +4,6 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use hera_db::repos::{
@@ -13,11 +12,14 @@ use hera_db::repos::{
     reports::ReportRepo,
     tenancy::TenancyRepo,
 };
-use hera_types::{ChainId, Network, ScanJobStatus};
+use hera_types::{
+    api::{PaginatedResponse, WorkspaceReportResponse},
+    ScanJobStatus,
+};
 
 use crate::{
     error::ApiError,
-    handlers::{append_audit, PaginatedResponse, PaginationQuery},
+    handlers::{append_audit, PaginationQuery},
     state::{AppState, TenantContext},
 };
 
@@ -182,16 +184,4 @@ fn artifact_response(
         response.headers_mut().insert("x-artifact-sha256", value);
     }
     response
-}
-
-#[derive(Debug, serde::Serialize)]
-pub struct WorkspaceReportResponse {
-    pub case_id: Uuid,
-    pub chain: ChainId,
-    pub network: Network,
-    pub status: String,
-    pub json_sha256: String,
-    pub pdf_sha256: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }

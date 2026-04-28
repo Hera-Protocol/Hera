@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use hera_db::repos::audit::{AuditEntry, AuditRepo};
 
@@ -40,13 +40,6 @@ impl PaginationQuery {
 
         Ok(Pagination { limit, offset })
     }
-}
-
-#[derive(Debug, Serialize)]
-pub struct PaginatedResponse<T> {
-    pub items: Vec<T>,
-    pub limit: usize,
-    pub offset: usize,
 }
 
 pub async fn append_audit(state: &AppState, entry: AuditEntry) -> Result<(), ApiError> {
