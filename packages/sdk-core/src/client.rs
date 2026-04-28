@@ -4,9 +4,10 @@ use uuid::Uuid;
 
 use hera_types::{
     api::{
-        CaseDetailResponse, CaseSummaryResponse, CreateCaseRequest, CreateCaseResponse,
-        CreateWorkspaceRequest, CreateWorkspaceResponse, GetCaseStatusResponse, PaginatedResponse,
-        ScanCaseResponse, WorkspaceSummaryResponse,
+        AuditLogResponse, CaseDetailResponse, CaseSummaryResponse, CreateCaseRequest,
+        CreateCaseResponse, CreateWorkspaceRequest, CreateWorkspaceResponse, GetCaseStatusResponse,
+        ImportViewingKeyRequest, ImportViewingKeyResponse, PaginatedResponse, ScanCaseResponse,
+        WorkspaceReportResponse, WorkspaceSummaryResponse, WorkspaceViewKeyResponse,
     },
     CanonicalEvent,
 };
@@ -30,6 +31,13 @@ pub struct HeraClient {
     base_url: String,
     api_key: String,
     client: reqwest::Client,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadedArtifact {
+    pub body: Vec<u8>,
+    pub sha256: Option<String>,
+    pub content_type: Option<String>,
 }
 
 impl HeraClient {
@@ -102,6 +110,70 @@ impl HeraClient {
         .await
     }
 
+    pub async fn import_zcash_view_key(
+        &self,
+        case_id: Uuid,
+        request: &ImportViewingKeyRequest,
+    ) -> Result<ImportViewingKeyResponse> {
+        self.post_json(
+            &format!("v1/cases/{case_id}/zcash/import-view-key"),
+            request,
+        )
+        .await
+    }
+
+    pub async fn import_namada_view_key(
+        &self,
+        case_id: Uuid,
+        request: &ImportViewingKeyRequest,
+    ) -> Result<ImportViewingKeyResponse> {
+        self.post_json(
+            &format!("v1/cases/{case_id}/namada/import-view-key"),
+            request,
+        )
+        .await
+    }
+
+    pub async fn list_workspace_view_keys(
+        &self,
+        workspace_id: Uuid,
+        pagination: PaginationParams,
+    ) -> Result<PaginatedResponse<WorkspaceViewKeyResponse>> {
+        self.get_json(&format!("v1/workspaces/{workspace_id}/keys"), pagination)
+            .await
+    }
+
+    pub async fn list_workspace_reports(
+        &self,
+        workspace_id: Uuid,
+        pagination: PaginationParams,
+    ) -> Result<PaginatedResponse<WorkspaceReportResponse>> {
+        self.get_json(&format!("v1/workspaces/{workspace_id}/reports"), pagination)
+            .await
+    }
+
+    pub async fn list_workspace_audit_logs(
+        &self,
+        workspace_id: Uuid,
+        pagination: PaginationParams,
+    ) -> Result<PaginatedResponse<AuditLogResponse>> {
+        self.get_json(
+            &format!("v1/workspaces/{workspace_id}/audit-logs"),
+            pagination,
+        )
+        .await
+    }
+
+    pub async fn download_case_report_json(&self, case_id: Uuid) -> Result<DownloadedArtifact> {
+        self.get_artifact(&format!("v1/cases/{case_id}/report.json"))
+            .await
+    }
+
+    pub async fn download_case_report_pdf(&self, case_id: Uuid) -> Result<DownloadedArtifact> {
+        self.get_artifact(&format!("v1/cases/{case_id}/report.pdf"))
+            .await
+    }
+
     async fn get_json<T>(&self, path: &str, pagination: PaginationParams) -> Result<T>
     where
         T: DeserializeOwned,
@@ -131,6 +203,32 @@ impl HeraClient {
         T: DeserializeOwned,
     {
         let response = request.send().await?;
+        let response = self.ensure_success(response).await?;
+        Ok(response.json().await?)
+    }
+
+    async fn get_artifact(&self, path: &str) -> Result<DownloadedArtifact> {
+        let response = self.request(Method::GET, path).send().await?;
+        let response = self.ensure_success(response).await?;
+        let sha256 = response
+            .headers()
+            .get("x-artifact-sha256")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+
+        Ok(DownloadedArtifact {
+            body: response.bytes().await?.to_vec(),
+            sha256,
+            content_type,
+        })
+    }
+
+    async fn ensure_success(&self, response: reqwest::Response) -> Result<reqwest::Response> {
         let status = response.status();
         if !status.is_success() {
             return Err(HeraSdkError::Api {
@@ -139,7 +237,7 @@ impl HeraClient {
             });
         }
 
-        Ok(response.json().await?)
+        Ok(response)
     }
 
     fn request(&self, method: Method, path: &str) -> RequestBuilder {

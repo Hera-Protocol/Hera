@@ -3,5 +3,5 @@
 mod client;
 mod error;
 
-pub use client::{HeraClient, HeraClientConfig, PaginationParams};
+pub use client::{DownloadedArtifact, HeraClient, HeraClientConfig, PaginationParams};
 pub use error::{HeraSdkError, Result};
