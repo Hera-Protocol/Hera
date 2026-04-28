@@ -4,6 +4,7 @@ members = [
     "apps/worker",
     "apps/reporter",
     "packages/sdk-core",
+    "packages/sdk-wasm",
     "crates/hera-types",
     "crates/hera-core",
     "crates/hera-crypto",

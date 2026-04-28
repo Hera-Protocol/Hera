@@ -20,7 +20,7 @@ pub struct HeraClientConfig {
     pub api_key: String,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct PaginationParams {
     pub limit: Option<usize>,
     pub offset: Option<usize>,

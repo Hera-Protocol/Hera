@@ -1982,6 +1982,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hera-sdk-wasm"
+version = "0.1.0"
+dependencies = [
+ "hera-sdk-core",
+ "hera-types",
+ "serde",
+ "serde_json",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "hera-types"
 version = "0.1.0"
 dependencies = [
