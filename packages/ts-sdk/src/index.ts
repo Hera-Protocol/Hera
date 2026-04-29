@@ -54,6 +54,7 @@ export interface HeraWasmBindings {
 }
 
 export interface HeraWasmModule {
+  default(input?: unknown): Promise<unknown>;
   HeraClient: new (baseUrl: string, apiKey: string) => HeraWasmBindings;
 }
 
@@ -132,6 +133,19 @@ export class HeraClient {
   async getCaseEvents(caseId: string): Promise<CanonicalEvent[]> {
     return parseJson(await this.inner.getCaseEvents(caseId));
   }
+}
+
+export async function loadEmbeddedWasmModule(): Promise<HeraWasmModule> {
+  const wasm = (await import("./wasm/hera_sdk_wasm.js")) as HeraWasmModule;
+  await wasm.default();
+  return wasm;
+}
+
+export async function createHeraClient(
+  config: HeraClientConfig,
+  wasmModule?: HeraWasmModule,
+): Promise<HeraClient> {
+  return new HeraClient(wasmModule ?? (await loadEmbeddedWasmModule()), config);
 }
 
 function parseJson<T>(value: string): T {

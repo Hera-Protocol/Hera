@@ -1,7 +1,8 @@
 {
   "name": "@hera/ts-sdk",
   "version": "0.1.0",
-  "private": true,
+  "description": "Standalone TypeScript SDK for Hera privacy compliance workflows",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,8 +16,11 @@
     "dist"
   ],
   "scripts": {
-    "build:wasm": "wasm-pack build ../sdk-wasm --target bundler --out-dir ./vendor/hera-sdk-wasm",
-    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist ../sdk-wasm/dist",
+    "build:wasm": "wasm-pack build ../sdk-wasm --target bundler --out-dir $(pwd)/dist/wasm --out-name hera_sdk_wasm",
+    "postbuild:wasm": "rm -f dist/wasm/.gitignore dist/wasm/package.json",
+    "build": "npm run clean && npm run build:wasm && npm run postbuild:wasm && tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   }
 }
