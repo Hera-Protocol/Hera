@@ -1,11 +1,32 @@
 {
-  "name": "@hera/ts-sdk",
-  "version": "0.1.0",
+  "name": "@timmydev56/hera-ts-sdk",
+  "version": "0.1.5",
   "description": "Standalone TypeScript SDK for Hera privacy compliance workflows",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hera-Protocol/Hera.git",
+    "directory": "packages/ts-sdk"
+  },
+  "homepage": "https://github.com/Hera-Protocol/Hera/tree/main/packages/ts-sdk",
+  "bugs": {
+    "url": "https://github.com/Hera-Protocol/Hera/issues"
+  },
+  "keywords": [
+    "hera",
+    "privacy",
+    "compliance",
+    "zcash",
+    "namada",
+    "wasm",
+    "sdk"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

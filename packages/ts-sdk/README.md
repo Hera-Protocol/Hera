@@ -1,4 +1,4 @@
-# `@hera/ts-sdk`
+# `@timmydev56/hera-ts-sdk`
 
 Standalone TypeScript SDK package for Hera.
 
@@ -36,7 +36,7 @@ into `dist/`.
 ## Usage
 
 ```ts
-import { createHeraClient } from "@hera/ts-sdk";
+import { createHeraClient } from "@timmydev56/hera-ts-sdk";
 
 const client = await createHeraClient({
   baseUrl: "https://api.hera.example",
