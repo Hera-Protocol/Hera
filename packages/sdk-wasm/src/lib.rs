@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 
 use serde::{de::DeserializeOwned, Serialize};
-use serde_json;
 use uuid::Uuid;
 use wasm_bindgen::{prelude::wasm_bindgen, JsError, JsValue};
 
