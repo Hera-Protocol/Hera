@@ -424,9 +424,9 @@ mod tests {
     fn candidate_endpoints_trim_and_dedupe() {
         let scanner = ZcashScanner {
             lightwalletd_urls: vec![
-                " https://mainnet.lightwalletd.com:9067 ".to_string(),
+                " https://zec.rocks:443 ".to_string(),
                 String::new(),
-                "https://mainnet.lightwalletd.com:9067".to_string(),
+                "https://zec.rocks:443".to_string(),
                 "https://backup.example:9067".to_string(),
             ],
             network: Network::Mainnet,
@@ -435,7 +435,7 @@ mod tests {
         assert_eq!(
             scanner.candidate_endpoints(),
             vec![
-                "https://mainnet.lightwalletd.com:9067".to_string(),
+                "https://zec.rocks:443".to_string(),
                 "https://backup.example:9067".to_string(),
             ]
         );

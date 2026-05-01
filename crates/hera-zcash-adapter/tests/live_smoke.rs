@@ -22,7 +22,14 @@ fn lightwalletd_urls() -> (Vec<String>, bool) {
     if let Some(primary) = explicit_primary {
         urls.push(primary);
     } else {
-        urls.push("https://mainnet.lightwalletd.com:9067".to_string());
+        urls.extend([
+            "https://zec.rocks:443".to_string(),
+            "https://na.zec.rocks:443".to_string(),
+            "https://eu.zec.rocks:443".to_string(),
+            "https://ap.zec.rocks:443".to_string(),
+            "https://sa.zec.rocks:443".to_string(),
+            "https://zcashd.zec.rocks:443".to_string(),
+        ]);
     }
     urls.extend(explicit_fallbacks);
     (urls, explicit)
