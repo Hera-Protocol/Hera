@@ -51,10 +51,12 @@ export interface HeraWasmBindings {
   scanCase(caseId: string): Promise<string>;
   getCaseStatus(caseId: string): Promise<string>;
   getCaseEvents(caseId: string): Promise<string>;
+  downloadCaseReportJson(caseId: string): Promise<Uint8Array>;
+  downloadCaseReportPdf(caseId: string): Promise<Uint8Array>;
 }
 
 export interface HeraWasmModule {
-  default(input?: unknown): Promise<unknown>;
+  default?(input?: unknown): Promise<unknown>;
   HeraClient: new (baseUrl: string, apiKey: string) => HeraWasmBindings;
 }
 
@@ -133,11 +135,21 @@ export class HeraClient {
   async getCaseEvents(caseId: string): Promise<CanonicalEvent[]> {
     return parseJson(await this.inner.getCaseEvents(caseId));
   }
+
+  async downloadCaseReportJson(caseId: string): Promise<string> {
+    return decodeUtf8(await this.inner.downloadCaseReportJson(caseId));
+  }
+
+  async downloadCaseReportPdf(caseId: string): Promise<Uint8Array> {
+    return this.inner.downloadCaseReportPdf(caseId);
+  }
 }
 
 export async function loadEmbeddedWasmModule(): Promise<HeraWasmModule> {
   const wasm = (await import("./wasm/hera_sdk_wasm.js")) as HeraWasmModule;
-  await wasm.default();
+  if (typeof wasm.default === "function") {
+    await wasm.default();
+  }
   return wasm;
 }
 
@@ -150,6 +162,10 @@ export async function createHeraClient(
 
 function parseJson<T>(value: string): T {
   return JSON.parse(value) as T;
+}
+
+function decodeUtf8(value: Uint8Array): string {
+  return new TextDecoder().decode(value);
 }
 
 function encodeOptionalJson(value: PaginationParams): string | undefined {

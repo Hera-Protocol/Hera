@@ -12,4 +12,6 @@ export class HeraClient {
   scanCase(caseId: string): Promise<string>;
   getCaseStatus(caseId: string): Promise<string>;
   getCaseEvents(caseId: string): Promise<string>;
+  downloadCaseReportJson(caseId: string): Promise<Uint8Array>;
+  downloadCaseReportPdf(caseId: string): Promise<Uint8Array>;
 }

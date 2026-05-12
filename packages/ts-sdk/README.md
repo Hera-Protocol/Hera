@@ -46,6 +46,18 @@ const client = await createHeraClient({
 const workspaces = await client.listWorkspaces({ limit: 10 });
 ```
 
+Once a case reaches `SIGNED`, the SDK can download both report artifacts:
+
+```ts
+const manifestJson = await client.downloadCaseReportJson(caseId);
+const report = JSON.parse(manifestJson);
+
+const pdfBytes = await client.downloadCaseReportPdf(caseId);
+const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
+const url = URL.createObjectURL(pdfBlob);
+window.open(url, "_blank");
+```
+
 The bridge still uses JSON strings across the Wasm boundary on purpose. That keeps the published
 TypeScript package dependency-free while preserving the Rust implementation underneath.
 

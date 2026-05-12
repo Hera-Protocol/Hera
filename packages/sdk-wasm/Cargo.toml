@@ -10,6 +10,9 @@ repository = "https://github.com/Hera-Protocol/Hera"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dependencies]
 hera-sdk-core = { path = "../sdk-core" }
 hera-types = { path = "../../crates/hera-types" }

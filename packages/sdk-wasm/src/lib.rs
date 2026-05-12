@@ -138,6 +138,26 @@ impl HeraWasmClient {
             .map_err(js_error)?;
         serialize_json(&response).map_err(js_error)
     }
+
+    #[wasm_bindgen(js_name = downloadCaseReportJson)]
+    pub async fn download_case_report_json(&self, case_id: String) -> Result<Vec<u8>, JsValue> {
+        let response = self
+            .inner
+            .download_case_report_json(parse_uuid(&case_id).map_err(js_error)?)
+            .await
+            .map_err(js_error)?;
+        Ok(response.body)
+    }
+
+    #[wasm_bindgen(js_name = downloadCaseReportPdf)]
+    pub async fn download_case_report_pdf(&self, case_id: String) -> Result<Vec<u8>, JsValue> {
+        let response = self
+            .inner
+            .download_case_report_pdf(parse_uuid(&case_id).map_err(js_error)?)
+            .await
+            .map_err(js_error)?;
+        Ok(response.body)
+    }
 }
 
 fn parse_uuid(value: &str) -> Result<Uuid, String> {
