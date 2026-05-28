@@ -113,6 +113,8 @@ async fn setup_app(queue_name: &str) -> Option<(axum::Router, DbPool)> {
         kms_key_ref: "alias/hera-dev".into(),
         scan_queue_name: queue_name.to_string(),
         namada_chain_id: "namada.5f5de2dd1b88cba30586420".into(),
+        attestation_queue_name: "attestation-queue-test".into(),
+        demo_mode: false,
     };
 
     Some((build_router(state), db))
