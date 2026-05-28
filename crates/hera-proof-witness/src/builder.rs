@@ -24,7 +24,10 @@ impl WitnessBuilder {
         events: &[CanonicalEvent],
         risk_scores: &HashMap<Uuid, u8>,
     ) -> Result<Vec<WitnessRecord>, WitnessError> {
-        events.iter().map(|event| Self::convert(event, risk_scores)).collect()
+        events
+            .iter()
+            .map(|event| Self::convert(event, risk_scores))
+            .collect()
     }
 
     fn convert(

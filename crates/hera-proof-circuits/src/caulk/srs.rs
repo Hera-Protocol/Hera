@@ -38,11 +38,7 @@ impl CaulkPlusSrs {
         )
         .map_err(|e| ProofError::SrsGeneration(e.to_string()))?;
 
-        Ok(Self {
-            ck,
-            vk,
-            max_degree,
-        })
+        Ok(Self { ck, vk, max_degree })
     }
 
     /// Generates a small development SRS suitable for tables up to 2^10 entries.
@@ -71,7 +67,8 @@ impl CaulkPlusSrs {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
         let mut reader = &bytes[..];
         let max_degree = u64::deserialize_compressed(&mut reader)
-            .map_err(|e| ProofError::Serialization(e.to_string()))? as usize;
+            .map_err(|e| ProofError::Serialization(e.to_string()))?
+            as usize;
         let ck = CommitterKey::deserialize_compressed(&mut reader)
             .map_err(|e| ProofError::Serialization(e.to_string()))?;
         let vk = VerifierKey::deserialize_compressed(&mut reader)

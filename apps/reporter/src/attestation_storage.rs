@@ -3,10 +3,7 @@ use chrono::Utc;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use hera_db::{
-    repos::attestations::AttestationRepo,
-    DbPool,
-};
+use hera_db::{repos::attestations::AttestationRepo, DbPool};
 
 use crate::error::ReporterError;
 

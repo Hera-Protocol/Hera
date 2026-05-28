@@ -6,9 +6,7 @@ use axum::{
 use uuid::Uuid;
 
 use hera_db::repos::{
-    attestation_jobs::AttestationJobRepo,
-    attestations::AttestationRepo,
-    cases::CaseRepo,
+    attestation_jobs::AttestationJobRepo, attestations::AttestationRepo, cases::CaseRepo,
     jobs::ScanJobRepo,
 };
 use hera_types::{

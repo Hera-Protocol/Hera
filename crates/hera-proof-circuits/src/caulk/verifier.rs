@@ -3,10 +3,7 @@ use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::AdditiveGroup;
 
 use super::{
-    commitment::TableCommitment,
-    prover::CaulkPlusProof,
-    srs::CaulkPlusSrs,
-    transcript::Transcript,
+    commitment::TableCommitment, prover::CaulkPlusProof, srs::CaulkPlusSrs, transcript::Transcript,
 };
 use crate::error::ProofError;
 
@@ -51,13 +48,8 @@ pub fn verify(
     }
 
     // Step 3: Verify KZG opening of subset polynomial.
-    let subset_check = verify_kzg_opening(
-        srs,
-        &proof.c_i,
-        alpha,
-        proof.subset_eval,
-        &proof.pi_subset,
-    )?;
+    let subset_check =
+        verify_kzg_opening(srs, &proof.c_i, alpha, proof.subset_eval, &proof.pi_subset)?;
 
     if !subset_check {
         return Ok(false);

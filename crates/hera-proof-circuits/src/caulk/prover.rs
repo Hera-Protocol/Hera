@@ -238,7 +238,9 @@ fn poly_div(
     let div_coeffs = divisor.coeffs();
 
     if div_coeffs.is_empty() || (div_coeffs.len() == 1 && div_coeffs[0] == Fr::ZERO) {
-        return Err(ProofError::ProofGeneration("division by zero polynomial".into()));
+        return Err(ProofError::ProofGeneration(
+            "division by zero polynomial".into(),
+        ));
     }
 
     if num_coeffs.len() < div_coeffs.len() {
@@ -284,9 +286,7 @@ fn lagrange_interpolate(xs: &[Fr], ys: &[Fr]) -> DensePolynomial<Fr> {
                 weight *= xs[i] - xs[j];
             }
         }
-        weight = weight
-            .inverse()
-            .expect("duplicate interpolation points");
+        weight = weight.inverse().expect("duplicate interpolation points");
         weight *= ys[i];
 
         // Compute L_i(x) * y_i in coefficient form by accumulating

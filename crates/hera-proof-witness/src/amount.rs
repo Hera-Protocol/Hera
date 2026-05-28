@@ -20,9 +20,9 @@ pub fn parse_to_smallest_unit(amount_str: &str, decimals: u8) -> Result<u128, Wi
         )));
     }
 
-    let integer_part: u128 = parts[0]
-        .parse()
-        .map_err(|_| WitnessError::InvalidAmount(format!("invalid integer part in '{amount_str}'")))?;
+    let integer_part: u128 = parts[0].parse().map_err(|_| {
+        WitnessError::InvalidAmount(format!("invalid integer part in '{amount_str}'"))
+    })?;
 
     let fractional_raw = parts.get(1).copied().unwrap_or("");
 
@@ -37,9 +37,9 @@ pub fn parse_to_smallest_unit(amount_str: &str, decimals: u8) -> Result<u128, Wi
         0
     } else {
         let padded = format!("{fractional_raw:0<width$}", width = usize::from(decimals));
-        padded
-            .parse()
-            .map_err(|_| WitnessError::InvalidAmount(format!("invalid fractional part in '{amount_str}'")))?
+        padded.parse().map_err(|_| {
+            WitnessError::InvalidAmount(format!("invalid fractional part in '{amount_str}'"))
+        })?
     };
 
     let scale = 10u128
@@ -49,7 +49,9 @@ pub fn parse_to_smallest_unit(amount_str: &str, decimals: u8) -> Result<u128, Wi
     let total = integer_part
         .checked_mul(scale)
         .and_then(|v| v.checked_add(fractional))
-        .ok_or_else(|| WitnessError::FieldOverflow(format!("amount overflow for '{amount_str}'")))?;
+        .ok_or_else(|| {
+            WitnessError::FieldOverflow(format!("amount overflow for '{amount_str}'"))
+        })?;
 
     Ok(total)
 }
@@ -60,7 +62,10 @@ mod tests {
 
     #[test]
     fn parses_standard_zcash_amount() {
-        assert_eq!(parse_to_smallest_unit("1.25000000", 8).unwrap(), 125_000_000);
+        assert_eq!(
+            parse_to_smallest_unit("1.25000000", 8).unwrap(),
+            125_000_000
+        );
     }
 
     #[test]

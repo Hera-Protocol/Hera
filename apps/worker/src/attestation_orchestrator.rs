@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use deadpool_redis::Pool as RedisPool;
 use hera_db::{
-    repos::{
-        attestation_jobs::AttestationJobRepo,
-        events::EventRepo,
-    },
+    repos::{attestation_jobs::AttestationJobRepo, events::EventRepo},
     DbPool,
 };
 use hera_proof_circuits::{
@@ -39,9 +36,7 @@ impl AttestationOrchestrator {
         let job = AttestationJobRepo::new(&self.db)
             .get_by_id(job_id)
             .await?
-            .ok_or_else(|| {
-                OrchestratorError::MissingRecord(format!("attestation job {job_id}"))
-            })?;
+            .ok_or_else(|| OrchestratorError::MissingRecord(format!("attestation job {job_id}")))?;
 
         let outcome: Result<(), OrchestratorError> = async {
             // WitnessBuilding: load events and build witness records.
@@ -69,15 +64,12 @@ impl AttestationOrchestrator {
             let mut rng = ark_std::test_rng();
             let (proof_bytes, public_inputs) = match job.proof_type.as_str() {
                 "THRESHOLD_RECEIVED" => {
-                    let threshold_raw = job.parameters["threshold"]
-                        .as_u64()
-                        .unwrap_or(0) as u128;
+                    let threshold_raw = job.parameters["threshold"].as_u64().unwrap_or(0) as u128;
                     let statement = ThresholdStatement {
                         threshold_raw,
                         event_count: witness_records.len(),
                     };
-                    let proof =
-                        prove_threshold(&self.srs, &witness_records, &statement, &mut rng)?;
+                    let proof = prove_threshold(&self.srs, &witness_records, &statement, &mut rng)?;
                     let valid = verify_threshold(&self.srs, &statement, &proof)?;
                     let inputs = serde_json::json!({
                         "proof_type": "THRESHOLD_RECEIVED",
@@ -180,9 +172,7 @@ impl AttestationOrchestrator {
         AttestationJobRepo::new(&self.db)
             .update_status(job_id, status)
             .await?
-            .ok_or_else(|| {
-                OrchestratorError::MissingRecord(format!("attestation job {job_id}"))
-            })?;
+            .ok_or_else(|| OrchestratorError::MissingRecord(format!("attestation job {job_id}")))?;
         Ok(())
     }
 }

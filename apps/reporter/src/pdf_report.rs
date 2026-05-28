@@ -147,7 +147,13 @@ fn add_cover_page(
         &manifest.generated_at.to_rfc3339(),
     );
     write_key_value(layer, ctx, &mut y, "Chain", &format!("{:?}", case.chain));
-    write_key_value(layer, ctx, &mut y, "Network", &format!("{:?}", case.network));
+    write_key_value(
+        layer,
+        ctx,
+        &mut y,
+        "Network",
+        &format!("{:?}", case.network),
+    );
     write_key_value(
         layer,
         ctx,
@@ -456,13 +462,7 @@ fn add_signature_page(
         "Signed At",
         &manifest.signature.signed_at.to_rfc3339(),
     );
-    write_key_value(
-        &layer,
-        ctx,
-        &mut y,
-        "Manifest SHA256",
-        manifest_hash,
-    );
+    write_key_value(&layer, ctx, &mut y, "Manifest SHA256", manifest_hash);
 
     y -= 8.0;
     write_section_title(&layer, ctx, &mut y, "Public Key");
@@ -499,12 +499,7 @@ fn add_signature_page(
     Ok(())
 }
 
-fn write_page_title(
-    layer: &PdfLayerReference,
-    ctx: &PdfPageContext<'_>,
-    y: &mut f64,
-    title: &str,
-) {
+fn write_page_title(layer: &PdfLayerReference, ctx: &PdfPageContext<'_>, y: &mut f64, title: &str) {
     write_line(layer, ctx.bold_font, 20.0, LEFT_MARGIN, *y, title);
     *y -= 14.0;
 }
@@ -539,12 +534,7 @@ fn write_key_value(
     *y -= 2.0;
 }
 
-fn write_bullet(
-    layer: &PdfLayerReference,
-    ctx: &PdfPageContext<'_>,
-    y: &mut f64,
-    text: &str,
-) {
+fn write_bullet(layer: &PdfLayerReference, ctx: &PdfPageContext<'_>, y: &mut f64, text: &str) {
     for (index, line) in wrap_text(text, WRAP_WIDTH - 4).into_iter().enumerate() {
         let prefix = if index == 0 { "- " } else { "  " };
         write_line(
@@ -653,7 +643,11 @@ fn add_decimal_strings(left: &str, right: &str) -> Result<String, ReporterError>
 
     let sum = left_scaled
         .parse::<i128>()
-        .and_then(|left_value| right_scaled.parse::<i128>().map(|right_value| left_value + right_value))
+        .and_then(|left_value| {
+            right_scaled
+                .parse::<i128>()
+                .map(|right_value| left_value + right_value)
+        })
         .map_err(|_| {
             ReporterError::PdfGeneration("failed to aggregate canonical event amounts".to_string())
         })?;

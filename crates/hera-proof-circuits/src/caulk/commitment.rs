@@ -1,13 +1,13 @@
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_ec::pairing::Pairing;
 use ark_ff::{AdditiveGroup, Field};
-use ark_std::Zero;
 use ark_poly::{
     univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain,
     Polynomial,
 };
 use ark_poly_commit::{LabeledPolynomial, PolynomialCommitment};
 use ark_std::rand::RngCore;
+use ark_std::Zero;
 
 use super::srs::{CaulkPlusSrs, KZG};
 use crate::error::ProofError;
@@ -84,10 +84,7 @@ pub fn vanishing_poly_for_indices(
 
 /// Evaluates the table polynomial at the lookup positions and returns
 /// the values. Used to extract the looked-up values for the prover.
-pub fn extract_table_values(
-    table_commitment: &TableCommitment,
-    indices: &[usize],
-) -> Vec<Fr> {
+pub fn extract_table_values(table_commitment: &TableCommitment, indices: &[usize]) -> Vec<Fr> {
     indices
         .iter()
         .map(|&idx| {
@@ -120,7 +117,12 @@ mod tests {
     #[test]
     fn commits_to_small_table() {
         let srs = CaulkPlusSrs::generate(32, &mut ark_std::test_rng()).unwrap();
-        let table = vec![Fr::from(10u64), Fr::from(20u64), Fr::from(30u64), Fr::from(40u64)];
+        let table = vec![
+            Fr::from(10u64),
+            Fr::from(20u64),
+            Fr::from(30u64),
+            Fr::from(40u64),
+        ];
         let tc = commit_table(&srs, &table, &mut ark_std::test_rng()).unwrap();
         assert_eq!(tc.size, 4);
     }
@@ -128,7 +130,12 @@ mod tests {
     #[test]
     fn extracts_correct_values() {
         let srs = CaulkPlusSrs::generate(32, &mut ark_std::test_rng()).unwrap();
-        let table = vec![Fr::from(10u64), Fr::from(20u64), Fr::from(30u64), Fr::from(40u64)];
+        let table = vec![
+            Fr::from(10u64),
+            Fr::from(20u64),
+            Fr::from(30u64),
+            Fr::from(40u64),
+        ];
         let tc = commit_table(&srs, &table, &mut ark_std::test_rng()).unwrap();
         let values = extract_table_values(&tc, &[0, 2]);
         assert_eq!(values[0], Fr::from(10u64));

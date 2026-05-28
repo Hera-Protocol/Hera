@@ -4,7 +4,6 @@ use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 use blake2::{Blake2s256, Digest};
 
-
 /// Fiat-Shamir transcript using Blake2s for deterministic challenge generation.
 ///
 /// Every interactive round in the Caulk+ protocol is made non-interactive by
@@ -22,7 +21,11 @@ impl Transcript {
     }
 
     /// Absorbs a serialized group element into the transcript.
-    pub fn append_g1(&mut self, label: &[u8], point: &<ark_bls12_381::Bls12_381 as Pairing>::G1Affine) {
+    pub fn append_g1(
+        &mut self,
+        label: &[u8],
+        point: &<ark_bls12_381::Bls12_381 as Pairing>::G1Affine,
+    ) {
         self.state.update(label);
         let mut buf = Vec::new();
         point

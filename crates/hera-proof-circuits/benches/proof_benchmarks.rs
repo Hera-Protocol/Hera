@@ -4,14 +4,12 @@ use ark_bls12_381::Fr;
 use ark_ff::PrimeField;
 use hera_proof_circuits::{
     caulk::{
-        commitment::commit_table,
-        prover::prove as caulk_prove,
-        srs::CaulkPlusSrs,
+        commitment::commit_table, prover::prove as caulk_prove, srs::CaulkPlusSrs,
         verifier::verify as caulk_verify,
     },
     circuits::{
-        threshold::{prove_threshold, verify_threshold, ThresholdStatement},
         risk_score::{prove_risk_below, verify_risk_below, RiskScoreStatement},
+        threshold::{prove_threshold, verify_threshold, ThresholdStatement},
     },
 };
 use hera_proof_witness::WitnessRecord;

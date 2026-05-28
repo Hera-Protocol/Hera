@@ -60,10 +60,7 @@ impl<'a> AttestationRepo<'a> {
         Ok(id)
     }
 
-    pub async fn get_for_case(
-        &self,
-        case_id: Uuid,
-    ) -> Result<Vec<StoredAttestation>, DbError> {
+    pub async fn get_for_case(&self, case_id: Uuid) -> Result<Vec<StoredAttestation>, DbError> {
         let rows = sqlx::query_as::<_, AttestationRow>(
             r#"
             SELECT id, case_id, job_id, proof_type, proof_s3_key, proof_sha256,
@@ -81,10 +78,7 @@ impl<'a> AttestationRepo<'a> {
         Ok(rows.into_iter().map(AttestationRow::into_stored).collect())
     }
 
-    pub async fn get_by_job_id(
-        &self,
-        job_id: Uuid,
-    ) -> Result<Option<StoredAttestation>, DbError> {
+    pub async fn get_by_job_id(&self, job_id: Uuid) -> Result<Option<StoredAttestation>, DbError> {
         let row = sqlx::query_as::<_, AttestationRow>(
             r#"
             SELECT id, case_id, job_id, proof_type, proof_s3_key, proof_sha256,
