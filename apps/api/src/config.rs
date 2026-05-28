@@ -16,6 +16,7 @@ pub struct Config {
     pub aws_region: String,
     pub aws_endpoint_url: Option<String>,
     pub report_bucket: String,
+    pub demo_mode: bool,
 }
 
 impl Config {
@@ -33,6 +34,9 @@ impl Config {
             aws_region: required("AWS_REGION")?,
             aws_endpoint_url: optional("AWS_ENDPOINT_URL"),
             report_bucket: required("S3_BUCKET")?,
+            demo_mode: optional("DEMO_MODE")
+                .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+                .unwrap_or(false),
         })
     }
 }

@@ -26,6 +26,7 @@ impl<'a> AttestationRepo<'a> {
         Self { pool }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn store_attestation(
         &self,
         case_id: Uuid,

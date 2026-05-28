@@ -65,7 +65,7 @@ impl CaulkPlusSrs {
 
     /// Deserializes an SRS from bytes.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
-        let mut reader = &bytes[..];
+        let mut reader = bytes;
         let max_degree = u64::deserialize_compressed(&mut reader)
             .map_err(|e| ProofError::Serialization(e.to_string()))?
             as usize;

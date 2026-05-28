@@ -8,6 +8,7 @@ use crate::state::AppState;
 pub mod attestations;
 pub mod audit;
 pub mod cases;
+pub mod demo;
 pub mod keys;
 pub mod reports;
 pub mod workspaces;

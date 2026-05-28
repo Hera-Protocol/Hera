@@ -51,7 +51,7 @@ impl Transcript {
         self.state.update(label);
         let digest = self.state.clone().finalize();
         // Re-seed the state so subsequent challenges depend on this one.
-        self.state.update(&digest);
+        self.state.update(digest);
         Fr::from_le_bytes_mod_order(&digest)
     }
 }

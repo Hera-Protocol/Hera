@@ -38,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
         scan_queue_name: config.scan_queue_name.clone(),
         attestation_queue_name: config.attestation_queue_name.clone(),
         namada_chain_id: config.namada_chain_id.clone(),
+        demo_mode: config.demo_mode,
     };
     let router = build_router(state);
     let addr: SocketAddr = config.bind_addr.parse()?;

@@ -75,12 +75,12 @@ impl ReportContext {
         let audit_start = manifest
             .events
             .iter()
-            .map(|event| event.timestamp.clone())
+            .map(|event| event.timestamp)
             .min();
         let audit_end = manifest
             .events
             .iter()
-            .map(|event| event.timestamp.clone())
+            .map(|event| event.timestamp)
             .max();
         let distinct_assets = manifest
             .events

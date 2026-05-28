@@ -10,6 +10,7 @@ pub struct AttestationJobMessage {
     pub proof_type: String,
 }
 
+#[allow(dead_code)]
 pub async fn enqueue(
     redis: &RedisPool,
     queue_name: &str,

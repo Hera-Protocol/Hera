@@ -75,7 +75,7 @@ impl CaulkPlusProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
-        let mut reader = &bytes[..];
+        let mut reader = bytes;
         let c_i = <Bls12_381 as Pairing>::G1Affine::deserialize_compressed(&mut reader)
             .map_err(|e| ProofError::Serialization(e.to_string()))?;
         let c_z_i = <Bls12_381 as Pairing>::G1Affine::deserialize_compressed(&mut reader)
@@ -269,6 +269,7 @@ fn poly_div(
 
 /// Lagrange interpolation: given points (x_i, y_i), returns the unique polynomial
 /// of degree < n that passes through all points.
+#[allow(clippy::needless_range_loop)]
 fn lagrange_interpolate(xs: &[Fr], ys: &[Fr]) -> DensePolynomial<Fr> {
     assert_eq!(xs.len(), ys.len());
     let n = xs.len();

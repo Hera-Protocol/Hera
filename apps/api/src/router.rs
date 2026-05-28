@@ -11,7 +11,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{attestations, audit, cases, keys, reports, workspaces},
+    handlers::{attestations, audit, cases, demo, keys, reports, workspaces},
     middleware::{auth, tenant_isolation},
     state::AppState,
 };
@@ -86,6 +86,15 @@ pub fn build_router(state: AppState) -> Router {
             state.clone(),
             auth::auth_middleware,
         ))
+        // Demo sandbox routes — no auth required when DEMO_MODE=true.
+        .route(
+            "/v1/demo/cases/:id/report",
+            get(demo::demo_report),
+        )
+        .route(
+            "/v1/demo/attestation-types",
+            get(demo::demo_attestation_types),
+        )
         // Stage 1 frontend runs on a separate origin during local/ngrok demos.
         .layer(cors)
         .layer(TraceLayer::new_for_http())

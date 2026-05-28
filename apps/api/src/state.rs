@@ -17,6 +17,7 @@ pub struct AppState {
     pub scan_queue_name: String,
     pub attestation_queue_name: String,
     pub namada_chain_id: String,
+    pub demo_mode: bool,
 }
 
 /// Carries the authenticated tenant identity. Every request carries a tenant
