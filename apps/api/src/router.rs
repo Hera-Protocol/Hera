@@ -87,10 +87,7 @@ pub fn build_router(state: AppState) -> Router {
             auth::auth_middleware,
         ))
         // Demo sandbox routes — no auth required when DEMO_MODE=true.
-        .route(
-            "/v1/demo/cases/:id/report",
-            get(demo::demo_report),
-        )
+        .route("/v1/demo/cases/:id/report", get(demo::demo_report))
         .route(
             "/v1/demo/attestation-types",
             get(demo::demo_attestation_types),
