@@ -156,6 +156,33 @@ pub struct CanonicalEvent {
     pub notes: Vec<String>,
 }
 
+/// Describes the lifecycle stage of an attestation job so the API, worker, and
+/// audit logs share a single state machine vocabulary for proof generation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AttestationJobStatus {
+    Created,
+    WitnessBuilding,
+    Proving,
+    Verified,
+    Failed(String),
+}
+
+/// Represents the durable control-plane record for an attestation job so
+/// orchestration can track proof generation progress and expose status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct AttestationJob {
+    pub id: Uuid,
+    pub case_id: Uuid,
+    pub proof_type: String,
+    pub status: AttestationJobStatus,
+    pub failure_reason: Option<String>,
+    pub parameters: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Describes the lifecycle stage of a scan job so operators, APIs, and audit logs
 /// can all speak the same state machine language.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -15,6 +15,7 @@ pub struct AppState {
     pub report_storage: Arc<ReportStorage>,
     pub kms_key_ref: String,
     pub scan_queue_name: String,
+    pub attestation_queue_name: String,
     pub namada_chain_id: String,
 }
 

@@ -11,6 +11,8 @@ members = [
     "crates/hera-db",
     "crates/hera-zcash-adapter",
     "crates/hera-namada-adapter",
+    "crates/hera-proof-witness",
+    "crates/hera-proof-circuits",
 ]
 resolver = "2"
 
@@ -31,3 +33,10 @@ uuid = { version = "1.8", features = ["serde", "v4", "v5", "js"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }
 thiserror = "1.0"
 anyhow = "1.0"
+ark-ff = "0.5"
+ark-ec = "0.5"
+ark-poly = "0.5"
+ark-poly-commit = "0.5"
+ark-serialize = { version = "0.5", features = ["derive"] }
+ark-std = "0.5"
+ark-bls12-381 = "0.5"

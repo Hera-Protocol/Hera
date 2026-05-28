@@ -128,6 +128,31 @@ pub struct WorkspaceReportResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CreateAttestationRequest {
+    pub proof_type: String,
+    pub parameters: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct CreateAttestationResponse {
+    pub job_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct AttestationDetailResponse {
+    pub id: Uuid,
+    pub case_id: Uuid,
+    pub proof_type: String,
+    pub proof_sha256: String,
+    pub public_inputs: serde_json::Value,
+    pub srs_version: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct AuditLogResponse {
     pub id: Uuid,

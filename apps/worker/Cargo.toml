@@ -12,6 +12,8 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
+ark-bls12-381.workspace = true
+ark-std.workspace = true
 aws-config = "1"
 aws-sdk-s3 = "1"
 base64 = "0.22"
@@ -22,6 +24,8 @@ hera-core = { path = "../../crates/hera-core" }
 hera-crypto = { path = "../../crates/hera-crypto" }
 hera-db = { path = "../../crates/hera-db" }
 hera-namada-adapter = { path = "../../crates/hera-namada-adapter" }
+hera-proof-circuits = { path = "../../crates/hera-proof-circuits" }
+hera-proof-witness = { path = "../../crates/hera-proof-witness" }
 hera-reporter = { path = "../reporter" }
 hera-types = { path = "../../crates/hera-types" }
 hera-zcash-adapter = { path = "../../crates/hera-zcash-adapter" }

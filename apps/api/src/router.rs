@@ -11,7 +11,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{audit, cases, keys, reports, workspaces},
+    handlers::{attestations, audit, cases, keys, reports, workspaces},
     middleware::{auth, tenant_isolation},
     state::AppState,
 };
@@ -70,6 +70,14 @@ pub fn build_router(state: AppState) -> Router {
         .route("/v1/cases/:id/events", get(cases::get_case_events))
         .route("/v1/cases/:id/report.json", get(reports::report_json))
         .route("/v1/cases/:id/report.pdf", get(reports::report_pdf))
+        .route(
+            "/v1/cases/:id/attest",
+            post(attestations::create_attestation),
+        )
+        .route(
+            "/v1/cases/:id/attestation.json",
+            get(attestations::get_attestation),
+        )
         .layer(middleware::from_fn_with_state(
             state.clone(),
             tenant_isolation::tenant_isolation,

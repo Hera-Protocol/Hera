@@ -4,8 +4,8 @@ pub mod error;
 pub mod repos;
 
 use hera_types::{
-    ChainId, Counterparty, CounterpartyVisibility, EventMemo, EventProvenance, EventType, Network,
-    ScanJobStatus,
+    AttestationJobStatus, ChainId, Counterparty, CounterpartyVisibility, EventMemo,
+    EventProvenance, EventType, Network, ScanJobStatus,
 };
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
@@ -130,6 +130,36 @@ pub(crate) fn parse_scan_job_status(
         )),
         other => Err(DbError::InvalidData(format!(
             "unsupported scan job status value: {other}"
+        ))),
+    }
+}
+
+pub(crate) fn attestation_job_status_to_db(
+    status: &AttestationJobStatus,
+) -> (&'static str, Option<&str>) {
+    match status {
+        AttestationJobStatus::Created => ("CREATED", None),
+        AttestationJobStatus::WitnessBuilding => ("WITNESS_BUILDING", None),
+        AttestationJobStatus::Proving => ("PROVING", None),
+        AttestationJobStatus::Verified => ("VERIFIED", None),
+        AttestationJobStatus::Failed(reason) => ("FAILED", Some(reason.as_str())),
+    }
+}
+
+pub(crate) fn parse_attestation_job_status(
+    value: &str,
+    failure_reason: Option<String>,
+) -> Result<AttestationJobStatus, DbError> {
+    match value {
+        "CREATED" => Ok(AttestationJobStatus::Created),
+        "WITNESS_BUILDING" => Ok(AttestationJobStatus::WitnessBuilding),
+        "PROVING" => Ok(AttestationJobStatus::Proving),
+        "VERIFIED" => Ok(AttestationJobStatus::Verified),
+        "FAILED" => Ok(AttestationJobStatus::Failed(
+            failure_reason.unwrap_or_else(|| "attestation job failed".to_string()),
+        )),
+        other => Err(DbError::InvalidData(format!(
+            "unsupported attestation job status value: {other}"
         ))),
     }
 }

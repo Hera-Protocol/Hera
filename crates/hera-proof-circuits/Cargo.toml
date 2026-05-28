@@ -1,0 +1,32 @@
+[package]
+name = "hera-proof-circuits"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ark-bls12-381.workspace = true
+ark-ec.workspace = true
+ark-ff.workspace = true
+ark-poly.workspace = true
+ark-poly-commit.workspace = true
+ark-serialize.workspace = true
+ark-std.workspace = true
+blake2 = "0.10"
+chrono.workspace = true
+hera-proof-witness = { path = "../hera-proof-witness" }
+hera-types = { path = "../hera-types" }
+rand = "0.8"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tokio.workspace = true
+
+[[bench]]
+name = "proof_benchmarks"
+harness = false

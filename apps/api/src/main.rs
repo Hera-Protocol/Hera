@@ -36,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
         report_storage,
         kms_key_ref: config.kms_key_ref.clone(),
         scan_queue_name: config.scan_queue_name.clone(),
+        attestation_queue_name: config.attestation_queue_name.clone(),
         namada_chain_id: config.namada_chain_id.clone(),
     };
     let router = build_router(state);

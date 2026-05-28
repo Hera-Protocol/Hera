@@ -5,6 +5,7 @@ use hera_db::repos::audit::{AuditEntry, AuditRepo};
 use crate::error::ApiError;
 use crate::state::AppState;
 
+pub mod attestations;
 pub mod audit;
 pub mod cases;
 pub mod keys;

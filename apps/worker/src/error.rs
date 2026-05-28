@@ -16,6 +16,10 @@ pub enum OrchestratorError {
     Normalization(#[from] hera_core::NormalizationError),
     #[error("reporter error: {0}")]
     Reporter(#[from] hera_reporter::ReporterError),
+    #[error("proof error: {0}")]
+    Proof(#[from] hera_proof_circuits::ProofError),
+    #[error("witness error: {0}")]
+    Witness(#[from] hera_proof_witness::WitnessError),
     #[error("queue error: {0}")]
     Queue(String),
     #[error("missing record: {0}")]

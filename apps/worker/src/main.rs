@@ -1,3 +1,4 @@
+mod attestation_orchestrator;
 mod checkpoint;
 mod config;
 mod error;
@@ -13,11 +14,17 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use deadpool_redis::{Config as RedisConfig, Runtime};
 use ed25519_dalek::SigningKey;
 use hera_crypto::{KmsClient, LocalDevKms};
-use hera_reporter::{build_s3_client, ReportStorage};
+use hera_proof_circuits::caulk::srs::CaulkPlusSrs;
+use hera_reporter::{build_s3_client, AttestationStorage, ReportStorage};
 use tokio::sync::watch;
 use tracing::{error, info};
 
-use crate::{config::Config, jobs::scan_job::dequeue, orchestrator::ScanOrchestrator};
+use crate::{
+    attestation_orchestrator::AttestationOrchestrator,
+    config::Config,
+    jobs::{attestation_job::dequeue as dequeue_attestation, scan_job::dequeue},
+    orchestrator::ScanOrchestrator,
+};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -43,6 +50,17 @@ async fn main() -> anyhow::Result<()> {
     if config.aws_endpoint_url.is_some() {
         report_storage.ensure_bucket().await?;
     }
+
+    let attestation_storage = Arc::new(AttestationStorage::new(
+        build_s3_client(&config.aws_region, config.aws_endpoint_url.as_deref()).await,
+        config.report_bucket.clone(),
+        db.clone(),
+        config.report_kms_key_id.clone(),
+    ));
+
+    info!("generating dev SRS for Caulk+ proofs");
+    let srs = Arc::new(CaulkPlusSrs::dev_srs().expect("failed to generate dev SRS"));
+    info!("SRS ready (max_degree={})", srs.max_degree);
 
     // We run multiple worker tasks not multiple processes in Stage 1. Stage 4
     // will scale to separate worker pods.
@@ -94,6 +112,56 @@ async fn main() -> anyhow::Result<()> {
                     Ok(None) => {}
                     Err(err) => {
                         error!(worker_index, error = %err, "queue poll failed");
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    }
+                }
+            }
+        }));
+    }
+
+    // Attestation worker loop — single-threaded for now (proof generation is CPU-bound).
+    {
+        let attest_config = config.clone();
+        let attest_db = db.clone();
+        let attest_redis = redis.clone();
+        let attest_storage = Arc::clone(&attestation_storage);
+        let attest_srs = Arc::clone(&srs);
+        let attest_in_flight = Arc::clone(&in_flight);
+        let attest_shutdown = shutdown_rx.clone();
+
+        handles.push(tokio::spawn(async move {
+            let orchestrator = AttestationOrchestrator {
+                db: attest_db,
+                _redis: attest_redis.clone(),
+                attestation_storage: attest_storage,
+                srs: attest_srs,
+                config: attest_config.clone(),
+            };
+            loop {
+                if *attest_shutdown.borrow() {
+                    break;
+                }
+
+                match dequeue_attestation(
+                    &attest_redis,
+                    &attest_config.attestation_queue_name,
+                    &attest_config.attestation_processing_queue_name,
+                )
+                .await
+                {
+                    Ok(Some(message)) => {
+                        info!(job_id = %message.job_id, "picked up attestation job");
+                        attest_in_flight.fetch_add(1, Ordering::SeqCst);
+                        let result = orchestrator.process_job(message.job_id).await;
+                        attest_in_flight.fetch_sub(1, Ordering::SeqCst);
+
+                        if let Err(err) = result {
+                            error!(job_id = %message.job_id, error = %err, "attestation job failed");
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(err) => {
+                        error!(error = %err, "attestation queue poll failed");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 }

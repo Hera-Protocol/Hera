@@ -22,6 +22,9 @@ pub struct Config {
     pub aws_endpoint_url: Option<String>,
     pub report_bucket: String,
     pub report_kms_key_id: Option<String>,
+    pub attestation_queue_name: String,
+    pub attestation_processing_queue_name: String,
+    pub proof_engine_version: String,
 }
 
 impl Config {
@@ -64,6 +67,12 @@ impl Config {
             aws_endpoint_url: optional("AWS_ENDPOINT_URL"),
             report_bucket: required("S3_BUCKET")?,
             report_kms_key_id: optional("KMS_KEY_ID"),
+            attestation_queue_name: optional("ATTESTATION_QUEUE_NAME")
+                .unwrap_or_else(|| "hera:attestation:pending".to_string()),
+            attestation_processing_queue_name: optional("ATTESTATION_PROCESSING_QUEUE_NAME")
+                .unwrap_or_else(|| "hera:attestation:processing".to_string()),
+            proof_engine_version: optional("PROOF_ENGINE_VERSION")
+                .unwrap_or_else(|| "caulk-plus-v1".to_string()),
         })
     }
 }
