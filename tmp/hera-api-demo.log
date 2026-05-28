@@ -1,0 +1,18 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: 2026-05-12 05:43:29.706 xcodebuild[76893:13147719]  DVTFilePathFSEvents: Failed to start fs event stream.
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/xcrun_db-nokhyvev' (errno=Operation not permitted)
+          2026-05-12 05:43:30.999 xcodebuild[76910:13147773]  DVTFilePathFSEvents: Failed to start fs event stream.
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/xcrun_db-C5GZNnvu' (errno=Operation not permitted)
+          2026-05-12 05:43:31.985 xcodebuild[76911:13147786]  DVTFilePathFSEvents: Failed to start fs event stream.
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/xcrun_db-c4q1zCpr' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/xcrun_db-kkRuApwa' (errno=Operation not permitted)
+
+warning: `hera-api` (bin "hera-api") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.79s
+     Running `target/debug/hera-api`
+[2m2026-05-13T03:54:47.293113Z[0m [32m INFO[0m [2mhera_api[0m[2m:[0m starting api server [3maddr[0m[2m=[0m127.0.0.1:3101
+Error: Address already in use (os error 48)

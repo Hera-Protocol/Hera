@@ -1,0 +1,15 @@
+{
+  "manifest_version": "1",
+  "case_id": "cea4b2e9-6d43-4655-b576-64a1277d4358",
+  "chain": "NAMADA",
+  "network": "MAINNET",
+  "generated_at": "2026-05-13T03:53:10.428758Z",
+  "event_count": 0,
+  "events": [],
+  "signature": {
+    "algorithm": "ed25519",
+    "public_key_hex": "7df525eee23f3ce548db30a58ffea4b685cef97cbe94a9aebf8e76f6d3c972c1",
+    "signature_hex": "5323196db26a3451082c94acd30531042f5b9bc4363b858c67e50cf1146c288d76b4f8d2024e01280a55ad5f6a258a85e95944c3891f4ddde58049dc7a2c890a",
+    "signed_at": "2026-05-13T03:53:10.436265Z"
+  }
+}

@@ -40,6 +40,24 @@ cargo run -p hera-api
 cargo run -p hera-worker
 ```
 
+## Stage 2 SDK Demo
+
+To run the end-to-end SDK demo locally:
+
+```sh
+tools/run-stage2-sdk-demo.sh
+```
+
+The script will:
+
+- start Docker Compose dependencies
+- apply Postgres migrations
+- seed a demo tenant API key
+- start the API and worker with the local demo env
+- run the TypeScript SDK flow in `tools/run-sdk-signed-demo.mjs`
+
+Outputs are written to `tmp/sdk-signed-demo/`.
+
 ## Environment Notes
 
 - `AWS_ENDPOINT_URL=http://localhost:4566` points the S3 client at LocalStack.

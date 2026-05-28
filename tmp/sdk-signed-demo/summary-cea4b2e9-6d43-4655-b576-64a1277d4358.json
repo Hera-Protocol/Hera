@@ -1,0 +1,20 @@
+{
+  "baseUrl": "http://127.0.0.1:3101",
+  "workspace": {
+    "id": "32c2c43e-cbbf-4a90-8637-8b7612a00c96",
+    "name": "SDK Signed Report Demo 2026-05-13T03:52:33.922Z"
+  },
+  "case": {
+    "id": "cea4b2e9-6d43-4655-b576-64a1277d4358"
+  },
+  "importResult": {
+    "key_ref": "d40c6bbe-cfbf-4734-98a2-c2e5acbec9b3"
+  },
+  "scan": {
+    "job_id": "6b19224b-24cc-4120-969c-c3dc4e51aeb5"
+  },
+  "finalStatus": "SIGNED",
+  "reportJsonPath": "/Users/ik/Documents/Hera/tmp/sdk-signed-demo/report-cea4b2e9-6d43-4655-b576-64a1277d4358.json",
+  "reportPdfPath": "/Users/ik/Documents/Hera/tmp/sdk-signed-demo/report-cea4b2e9-6d43-4655-b576-64a1277d4358.pdf",
+  "reportPdfLength": 14113
+}
