@@ -18,6 +18,7 @@ use hera_proof_circuits::{
 use hera_proof_witness::WitnessBuilder;
 use hera_reporter::AttestationStorage;
 use hera_types::AttestationJobStatus;
+use rand::rngs::OsRng;
 use tracing::info;
 use uuid::Uuid;
 
@@ -61,34 +62,50 @@ impl AttestationOrchestrator {
             self.transition(job_id, AttestationJobStatus::Proving)
                 .await?;
 
-            let mut rng = ark_std::test_rng();
+            let mut rng = OsRng;
             let (proof_bytes, public_inputs) = match job.proof_type.as_str() {
                 "THRESHOLD_RECEIVED" => {
-                    let threshold_raw = job.parameters["threshold"].as_u64().unwrap_or(0) as u128;
+                    let threshold_raw = job.parameters["threshold"].as_u64().ok_or_else(|| {
+                        OrchestratorError::Queue("missing or invalid 'threshold' parameter".into())
+                    })? as u128;
                     let statement = ThresholdStatement {
                         threshold_raw,
                         event_count: witness_records.len(),
                     };
                     let proof = prove_threshold(&self.srs, &witness_records, &statement, &mut rng)?;
                     let valid = verify_threshold(&self.srs, &statement, &proof)?;
+                    if !valid {
+                        return Err(OrchestratorError::Queue(
+                            "threshold proof verification failed".into(),
+                        ));
+                    }
                     let inputs = serde_json::json!({
                         "proof_type": "THRESHOLD_RECEIVED",
                         "threshold": threshold_raw,
                         "event_count": witness_records.len(),
-                        "verified": valid,
+                        "verified": true,
                     });
                     (proof.caulk_proof.to_bytes()?, inputs)
                 }
                 "NO_BLOCKLIST_EXPOSURE" => {
-                    let blocklist: Vec<ark_bls12_381::Fr> = job.parameters["blocklist"]
-                        .as_array()
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|v| v.as_u64())
-                                .map(ark_bls12_381::Fr::from)
-                                .collect()
-                        })
-                        .unwrap_or_default();
+                    let blocklist: Vec<ark_bls12_381::Fr> = job
+                        .parameters
+                        .get("blocklist")
+                        .and_then(|v| v.as_array())
+                        .ok_or_else(|| {
+                            OrchestratorError::Queue(
+                                "missing or invalid 'blocklist' parameter".into(),
+                            )
+                        })?
+                        .iter()
+                        .filter_map(|v| v.as_u64())
+                        .map(ark_bls12_381::Fr::from)
+                        .collect();
+                    if blocklist.is_empty() {
+                        return Err(OrchestratorError::Queue(
+                            "blocklist must not be empty".into(),
+                        ));
+                    }
                     let statement = BlocklistStatement {
                         blocklist_size: blocklist.len(),
                         event_count: witness_records.len(),
@@ -100,16 +117,29 @@ impl AttestationOrchestrator {
                         &mut rng,
                     )?;
                     let valid = verify_no_blocklist_exposure(&self.srs, &statement, &proof)?;
+                    if !valid {
+                        return Err(OrchestratorError::Queue(
+                            "blocklist proof verification failed".into(),
+                        ));
+                    }
                     let inputs = serde_json::json!({
                         "proof_type": "NO_BLOCKLIST_EXPOSURE",
                         "blocklist_size": blocklist.len(),
                         "event_count": witness_records.len(),
-                        "verified": valid,
+                        "verified": true,
                     });
                     (proof.membership_proof.to_bytes()?, inputs)
                 }
                 "RISK_BELOW_THRESHOLD" => {
-                    let max_risk = job.parameters["max_risk"].as_u64().unwrap_or(100) as u8;
+                    let max_risk_val = job.parameters["max_risk"].as_u64().ok_or_else(|| {
+                        OrchestratorError::Queue("missing or invalid 'max_risk' parameter".into())
+                    })?;
+                    if max_risk_val > 100 {
+                        return Err(OrchestratorError::Queue(
+                            "max_risk must be between 0 and 100".into(),
+                        ));
+                    }
+                    let max_risk = max_risk_val as u8;
                     let statement = RiskScoreStatement {
                         max_risk,
                         event_count: witness_records.len(),
@@ -117,16 +147,21 @@ impl AttestationOrchestrator {
                     let proof =
                         prove_risk_below(&self.srs, &witness_records, &statement, &mut rng)?;
                     let valid = verify_risk_below(&self.srs, &statement, &proof)?;
+                    if !valid {
+                        return Err(OrchestratorError::Queue(
+                            "risk score proof verification failed".into(),
+                        ));
+                    }
                     let inputs = serde_json::json!({
                         "proof_type": "RISK_BELOW_THRESHOLD",
                         "max_risk": max_risk,
                         "event_count": witness_records.len(),
-                        "verified": valid,
+                        "verified": true,
                     });
                     (proof.caulk_proof.to_bytes()?, inputs)
                 }
                 other => {
-                    return Err(OrchestratorError::MissingRecord(format!(
+                    return Err(OrchestratorError::Queue(format!(
                         "unknown proof type: {other}"
                     )));
                 }

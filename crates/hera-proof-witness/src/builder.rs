@@ -38,7 +38,14 @@ impl WitnessBuilder {
         let event_type = Fr::from(event_type_ordinal(&event.event_type));
         let txid_hash = hash_txid(&event.txid)?;
         let block_height = Fr::from(event.block_height);
-        let timestamp = Fr::from(event.timestamp.timestamp() as u64);
+        let ts = event.timestamp.timestamp();
+        if ts < 0 {
+            return Err(WitnessError::InvalidAmount(format!(
+                "negative timestamp for event {}",
+                event.event_id
+            )));
+        }
+        let timestamp = Fr::from(ts as u64);
 
         let risk = risk_scores
             .get(&event.event_id)

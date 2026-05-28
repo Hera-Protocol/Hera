@@ -111,6 +111,11 @@ pub fn verify_no_blocklist_exposure(
         }
     }
 
+    // Verify that looked-up values and blocklist evaluations have matching counts.
+    if proof.membership_proof.looked_up_values.len() != proof.blocklist_evals.len() {
+        return Ok(false);
+    }
+
     // Recompute and verify the blocklist evaluations against the looked-up values.
     let vanishing =
         DensePolynomial::from_coefficients_vec(proof.blocklist_vanishing_coeffs.clone());

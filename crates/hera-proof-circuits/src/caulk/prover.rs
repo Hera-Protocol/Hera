@@ -92,6 +92,11 @@ impl CaulkPlusProof {
             .map_err(|e| ProofError::Serialization(e.to_string()))?;
         let count = u64::deserialize_compressed(&mut reader)
             .map_err(|e| ProofError::Serialization(e.to_string()))? as usize;
+        if count > 1_000_000 {
+            return Err(ProofError::Serialization(format!(
+                "looked_up_values count {count} exceeds maximum"
+            )));
+        }
         let mut looked_up_values = Vec::with_capacity(count);
         for _ in 0..count {
             looked_up_values.push(
@@ -134,6 +139,16 @@ pub fn prove(
 
     let domain = &table_commitment.domain;
 
+    // Validate all lookup indices are within the domain.
+    for &idx in lookup_indices {
+        if idx >= domain.size() {
+            return Err(ProofError::ProofGeneration(format!(
+                "lookup index {idx} out of domain bounds (size {})",
+                domain.size()
+            )));
+        }
+    }
+
     // Step 1: Extract the looked-up values from the table.
     let looked_up_values: Vec<Fr> = lookup_indices
         .iter()
@@ -150,7 +165,7 @@ pub fn prove(
         .iter()
         .map(|&idx| domain.element(idx))
         .collect();
-    let subset_poly = lagrange_interpolate(&interp_points, &looked_up_values);
+    let subset_poly = lagrange_interpolate(&interp_points, &looked_up_values)?;
 
     // Step 3: Compute the vanishing polynomial z_I(x) = prod(x - omega^i).
     let z_i_poly = vanishing_poly_for_indices(domain, lookup_indices);
@@ -270,11 +285,15 @@ fn poly_div(
 /// Lagrange interpolation: given points (x_i, y_i), returns the unique polynomial
 /// of degree < n that passes through all points.
 #[allow(clippy::needless_range_loop)]
-fn lagrange_interpolate(xs: &[Fr], ys: &[Fr]) -> DensePolynomial<Fr> {
-    assert_eq!(xs.len(), ys.len());
+fn lagrange_interpolate(xs: &[Fr], ys: &[Fr]) -> Result<DensePolynomial<Fr>, ProofError> {
+    if xs.len() != ys.len() {
+        return Err(ProofError::ProofGeneration(
+            "interpolation point/value count mismatch".into(),
+        ));
+    }
     let n = xs.len();
     if n == 0 {
-        return DensePolynomial::from_coefficients_vec(vec![]);
+        return Ok(DensePolynomial::from_coefficients_vec(vec![]));
     }
 
     // result = sum_i y_i * L_i(x), where L_i(x) = prod_{j!=i} (x - x_j)/(x_i - x_j)
@@ -287,7 +306,9 @@ fn lagrange_interpolate(xs: &[Fr], ys: &[Fr]) -> DensePolynomial<Fr> {
                 weight *= xs[i] - xs[j];
             }
         }
-        weight = weight.inverse().expect("duplicate interpolation points");
+        weight = weight
+            .inverse()
+            .ok_or_else(|| ProofError::ProofGeneration("duplicate interpolation points".into()))?;
         weight *= ys[i];
 
         // Compute L_i(x) * y_i in coefficient form by accumulating
@@ -310,5 +331,5 @@ fn lagrange_interpolate(xs: &[Fr], ys: &[Fr]) -> DensePolynomial<Fr> {
         }
     }
 
-    DensePolynomial::from_coefficients_vec(result)
+    Ok(DensePolynomial::from_coefficients_vec(result))
 }
